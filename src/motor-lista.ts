@@ -1,0 +1,209 @@
+import { App, setIcon } from "obsidian";
+import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, emPeriodoDeAviso, estaNoInbox } from "./tipos";
+import { RepositorioTarefas } from "./repositorio-tarefas";
+import { ModalNovaTarefa } from "./modal-nova-tarefa";
+import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa } from "./render-tarefa";
+import { agruparTarefas } from "./motor-agrupamento";
+import { compilarFiltro } from "./motor-filtro";
+import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
+import { SeletorAgrupamento } from "./seletor-agrupamento";
+
+export interface OpcoesMotorLista {
+	app: App;
+	repositorio: RepositorioTarefas;
+	configuracoes: ConfiguracoesGestorTarefas;
+	filtro?: (tarefa: Tarefa) => boolean;
+	agrupamentoInicial?: TipoAgrupamento;
+	arrastavel?: boolean;
+	permitirTrocaAgrupamento?: boolean;
+	permitirEdicaoFiltro?: boolean;
+	permitirCriarTarefa?: boolean;
+	mostrarToggleInbox?: boolean;
+}
+
+export class MotorLista {
+	private agrupamento: TipoAgrupamento;
+	private condicoesFiltro: CondicaoFiltro[] = [];
+	private filtroSalvoId: string | null = null;
+	private areaCorpo: HTMLElement | null = null;
+	private modo: "tarefas" | "inbox" = "tarefas";
+
+	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorLista) {
+		this.agrupamento = opcoes.agrupamentoInicial ?? "nenhum";
+	}
+
+	renderizar(): void {
+		this.containerEl.empty();
+		this.containerEl.addClass("mytasks-container");
+
+		this.desenharCabecalho();
+		this.areaCorpo = this.containerEl.createDiv({ cls: "mytasks-lista-corpo" });
+		this.renderizarCorpo();
+	}
+
+	destruir(): void {}
+
+	private tarefasFiltradas(): Tarefa[] {
+		const todas = this.opcoes.repositorio.listarTarefas();
+		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+		const base = todas.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true)).filter(filtroInterativo);
+
+		if (!this.opcoes.mostrarToggleInbox) return base;
+
+		return base.filter((t) =>
+			this.modo === "inbox" ? estaNoInbox(t, this.opcoes.configuracoes) : !estaNoInbox(t, this.opcoes.configuracoes)
+		);
+	}
+
+	private propriedadesVisiveisAtuais(): string[] | null {
+		const { listaPropriedadesVisiveis, listaInboxPropriedadesVisiveis } = this.opcoes.configuracoes;
+		return this.modo === "inbox" ? listaInboxPropriedadesVisiveis : listaPropriedadesVisiveis;
+	}
+
+	private propriedadesMeta() {
+		const propriedadesVisiveis = this.propriedadesVisiveisAtuais();
+		const { propriedades } = this.opcoes.configuracoes;
+		return propriedadesVisiveis ? propriedades.filter((p) => propriedadesVisiveis.includes(p.id)) : propriedades;
+	}
+
+	private ocultarNaMeta(): string[] {
+		const propriedadesVisiveis = this.propriedadesVisiveisAtuais();
+		const ocultarDataEntrada = propriedadesVisiveis !== null && !propriedadesVisiveis.includes(ID_DATA_ENTRADA);
+		const ocultarStatus = propriedadesVisiveis !== null && !propriedadesVisiveis.includes(ID_STATUS);
+		const base = this.agrupamento !== "nenhum" ? [this.agrupamento] : [];
+		if (this.agrupamento === "dia") base.push(ID_DATA);
+		if (ocultarDataEntrada) base.push(ID_DATA_ENTRADA);
+		if (ocultarStatus) base.push(ID_STATUS);
+		return base;
+	}
+
+	private ordenar(tarefas: Tarefa[]): Tarefa[] {
+		const hoje = new Date();
+		return [...tarefas].sort((a, b) => {
+			const avisoA = emPeriodoDeAviso(a, hoje) ? 0 : 1;
+			const avisoB = emPeriodoDeAviso(b, hoje) ? 0 : 1;
+			if (avisoA !== avisoB) return avisoA - avisoB;
+			if (!a.data && !b.data) return 0;
+			if (!a.data) return 1;
+			if (!b.data) return -1;
+			return a.data.localeCompare(b.data);
+		});
+	}
+
+	private renderizarCorpo(): void {
+		if (!this.areaCorpo) return;
+		this.areaCorpo.empty();
+
+		const tarefas = this.tarefasFiltradas();
+		if (tarefas.length === 0) {
+			this.areaCorpo.createEl("p", {
+				text: "Nenhuma tarefa encontrada.",
+				cls: "mytasks-vazio",
+			});
+			return;
+		}
+
+		const grupos = agruparTarefas(tarefas, this.agrupamento, this.opcoes.configuracoes);
+		const areaLista = this.areaCorpo.createDiv({ cls: "mytasks-lista-area" });
+
+		for (const grupo of grupos) {
+			if (grupo.tarefas.length === 0) continue;
+			if (this.agrupamento !== "nenhum") {
+				const cabecalhoGrupo = areaLista.createDiv({ cls: "mytasks-lista-cabecalho-grupo" });
+				cabecalhoGrupo.createEl("span", { text: grupo.rotulo });
+				if (grupo.cor) cabecalhoGrupo.style.setProperty("--mytasks-cor-grupo", grupo.cor);
+			}
+			const lista = areaLista.createDiv({ cls: "mytasks-lista" });
+			for (const tarefa of this.ordenar(grupo.tarefas)) {
+				desenharCartaoTarefa(lista, this.opcoes.app, this.opcoes.repositorio, this.opcoes.configuracoes, tarefa, {
+					arrastavel: this.modo === "inbox" ? true : this.opcoes.arrastavel ?? false,
+					propriedadesMeta: this.propriedadesMeta(),
+					ocultarNaMeta: this.ocultarNaMeta(),
+					aoAtualizar: () => this.renderizar(),
+				});
+			}
+		}
+	}
+
+	private desenharCabecalho(): void {
+		const cabecalho = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
+
+		if (this.opcoes.mostrarToggleInbox) {
+			const toggle = cabecalho.createDiv({ cls: "mytasks-toggle-inbox" });
+			const botaoTarefas = toggle.createEl("button", { text: "Tarefas" });
+			const botaoInbox = toggle.createEl("button", { text: "Inbox" });
+			botaoTarefas.toggleClass("mytasks-toggle-ativo", this.modo === "tarefas");
+			botaoInbox.toggleClass("mytasks-toggle-ativo", this.modo === "inbox");
+			botaoTarefas.addEventListener("click", () => {
+				this.modo = "tarefas";
+				this.renderizar();
+			});
+			botaoInbox.addEventListener("click", () => {
+				this.modo = "inbox";
+				this.renderizar();
+			});
+		}
+
+		if (this.modo === "inbox") {
+			if (this.opcoes.permitirCriarTarefa !== false) {
+				const linhaCaptura = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
+				this.desenharCapturaRapida(linhaCaptura);
+			}
+			return;
+		}
+
+		if (this.opcoes.permitirCriarTarefa !== false) {
+			const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
+			const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
+			setIcon(iconeNova, "square-plus");
+			botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
+			botaoNova.addEventListener("click", () => {
+				new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
+					await this.opcoes.repositorio.criarTarefa(titulo, dados);
+					this.renderizar();
+				}).open();
+			});
+		}
+
+		if (this.opcoes.permitirTrocaAgrupamento !== false) {
+			new SeletorAgrupamento(cabecalho, {
+				configuracoes: this.opcoes.configuracoes,
+				agrupamentoAtual: this.agrupamento,
+				permitirNenhum: true,
+				permitirDia: true,
+				aoEscolher: (agrupamento) => {
+					this.agrupamento = agrupamento;
+					this.renderizarCorpo();
+				},
+			});
+		}
+
+		if (this.opcoes.permitirEdicaoFiltro !== false) {
+			new SeletorFiltroSalvo(cabecalho, {
+				configuracoes: this.opcoes.configuracoes,
+				filtroAtualId: this.filtroSalvoId,
+				aoEscolher: (filtroId, condicoes) => {
+					this.filtroSalvoId = filtroId;
+					this.condicoesFiltro = condicoes;
+					this.renderizarCorpo();
+				},
+			});
+		}
+	}
+
+	private desenharCapturaRapida(container: HTMLElement): void {
+		const input = container.createEl("input", {
+			type: "text",
+			placeholder: "Adicionar ao Inbox...",
+			cls: "mytasks-captura-rapida",
+		});
+		input.addEventListener("keydown", async (evento) => {
+			if (evento.key !== "Enter") return;
+			const titulo = input.value.trim();
+			if (!titulo) return;
+			await this.opcoes.repositorio.criarTarefaRapida(titulo);
+			input.value = "";
+			this.renderizarCorpo();
+		});
+	}
+}

@@ -1,0 +1,938 @@
+.mytasks-container,
+.mytasks-container-aba {
+	--gt-borda: var(--background-modifier-border-hover, var(--background-modifier-border));
+	--gt-borda-fraca: color-mix(in srgb, var(--gt-borda) 75%, transparent);
+	--gt-borda-coluna: color-mix(in srgb, var(--gt-borda) 75%, transparent);
+	--gt-raio: 10px;
+}
+
+.mytasks-container {
+	padding: 8px 12px;
+}
+
+.mytasks-config-abas {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mytasks-config-aba {
+	padding: 6px 14px;
+	background: var(--background-secondary);
+	border: none;
+	box-shadow: none;
+	border-radius: 8px;
+	font-size: 0.85em;
+	font-weight: 500;
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.mytasks-config-aba:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-config-aba-ativa,
+.mytasks-config-aba-ativa:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.mytasks-cabecalho {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 12px;
+}
+
+.mytasks-cabecalho h3 {
+	margin: 0;
+	margin-right: auto;
+}
+
+.mytasks-cabecalho button {
+	cursor: pointer;
+}
+
+.mytasks-cabecalho > button,
+.mytasks-seletor-discreto,
+.mytasks-calendario-seletor-modo {
+	padding: 6px 12px !important;
+	background: var(--background-modifier-border) !important;
+	border: none !important;
+	box-shadow: none !important;
+	border-radius: 8px !important;
+	font-size: 0.85em !important;
+	font-weight: 500 !important;
+	color: var(--text-normal) !important;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-calendario-seletor-modo {
+	border: 1px solid var(--gt-borda);
+}
+
+.mytasks-botao-nova-tarefa {
+	text-transform: lowercase;
+}
+
+.mytasks-cabecalho > button:hover,
+.mytasks-seletor-discreto:hover,
+.mytasks-calendario-seletor-modo:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-vazio {
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
+.mytasks-lista-filtro {
+	margin-bottom: 8px;
+}
+
+.mytasks-toggle-inbox {
+	display: flex;
+	gap: 2px;
+	background: var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 2px;
+	margin-right: auto;
+}
+
+.mytasks-toggle-inbox button {
+	border: none;
+	background: transparent;
+	padding: 3px 10px;
+	font-size: 0.82em;
+	border-radius: 4px;
+	color: var(--text-muted);
+	box-shadow: none;
+}
+
+.mytasks-toggle-inbox button.mytasks-toggle-ativo {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: 600;
+}
+
+.mytasks-captura-rapida {
+	flex: 1;
+	min-width: 120px;
+}
+
+.mytasks-lista-cabecalho-grupo {
+	font-size: 0.8em;
+	font-weight: 600;
+	color: var(--mytasks-cor-grupo, var(--text-muted));
+	margin: 14px 0 4px 2px;
+}
+
+.mytasks-lista-area .mytasks-lista-cabecalho-grupo:first-child {
+	margin-top: 0;
+}
+
+.mytasks-lista {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.mytasks-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-item[draggable="true"] {
+	cursor: grab;
+}
+
+.mytasks-item-borda-reta {
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+}
+
+.mytasks-item-arrastando {
+	opacity: 0.4;
+}
+
+.mytasks-item-feito .mytasks-titulo {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+.mytasks-item-aviso {
+	border-radius: 6px;
+}
+
+.mytasks-titulo {
+	transition: color 0.15s ease;
+}
+
+.mytasks-item input[type="checkbox"].mytasks-checkbox-colorido {
+	accent-color: var(--mytasks-cor) !important;
+	--checkbox-color: var(--mytasks-cor) !important;
+	--checkbox-color-hover: var(--mytasks-cor) !important;
+	--checkbox-border-color: var(--mytasks-cor) !important;
+	--checkbox-border-color-hover: var(--mytasks-cor) !important;
+}
+
+.mytasks-item input[type="checkbox"].mytasks-checkbox-colorido:checked {
+	background-color: var(--mytasks-cor) !important;
+	border-color: var(--mytasks-cor) !important;
+}
+
+.mytasks-item input[type="checkbox"].mytasks-checkbox-colorido:not(:checked) {
+	border-width: var(--mytasks-espessura, 2px) !important;
+	border-color: var(--mytasks-cor) !important;
+}
+
+.mytasks-coluna-checkbox {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.mytasks-icone-recorrencia {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-faint);
+	margin-left: 4px;
+}
+
+.mytasks-icone-recorrencia svg {
+	width: 13px;
+	height: 13px;
+}
+
+.mytasks-cores-caixa {
+	margin: 4px 0 12px 16px;
+	padding-left: 12px;
+	border-left: 2px solid var(--background-modifier-border);
+}
+
+.mytasks-construtor-filtro {
+	margin: 4px 0 12px 16px;
+	padding-left: 12px;
+	border-left: 2px solid var(--background-modifier-border);
+	font-size: 0.85em;
+}
+
+.mytasks-construtor-filtro-linha {
+	margin-bottom: 8px;
+}
+
+.mytasks-construtor-filtro-valor {
+	margin: 4px 0 4px 8px;
+}
+
+.mytasks-construtor-filtro-painel {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 20;
+	min-width: 260px;
+	max-width: 340px;
+	margin-top: 4px;
+	padding: 10px 12px;
+	background: var(--background-primary);
+	border: 1px solid var(--gt-borda, var(--background-modifier-border));
+	border-radius: 8px;
+	box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.16));
+	font-size: 0.85em;
+}
+
+.mytasks-construtor-filtro-painel .mytasks-construtor-filtro-linha {
+	margin-bottom: 8px;
+}
+
+.mytasks-construtor-filtro-painel .setting-item {
+	padding: 6px 0;
+	border: none;
+}
+
+.mytasks-construtor-filtro-painel .setting-item-name {
+	font-size: 0.9em;
+	font-weight: 500;
+	padding: 4px 8px;
+}
+
+.mytasks-construtor-filtro-painel .setting-item-description {
+	font-size: 0.82em;
+}
+
+.mytasks-construtor-filtro-painel select,
+.mytasks-construtor-filtro-painel input {
+	font-size: 0.9em;
+	border-radius: var(--gt-raio, 8px);
+	background: var(--background-primary);
+}
+
+.mytasks-seletor-agrupamento {
+	font-size: 0.85em;
+}
+
+.mytasks-seletor-discreto {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.mytasks-seletor-discreto-icone {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+}
+
+.mytasks-seletor-discreto-icone svg,
+.mytasks-seletor-discreto-chevron svg {
+	width: 13px;
+	height: 13px;
+}
+
+.mytasks-seletor-discreto-texto {
+	white-space: nowrap;
+	text-transform: lowercase;
+}
+
+.mytasks-seletor-discreto-chevron {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-faint);
+}
+
+.mytasks-cor-linha .setting-item-name {
+	font-size: 0.9em;
+}
+
+.mytasks-info {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.mytasks-titulo {
+	cursor: pointer;
+	font-size: 0.95em;
+}
+
+.mytasks-titulo:hover {
+	text-decoration: underline;
+}
+
+.mytasks-meta {
+	font-size: 0.75em;
+	color: var(--text-muted);
+}
+
+.mytasks-campo-tags {
+	position: relative;
+	min-width: 220px;
+}
+
+.mytasks-tags-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 4px;
+}
+
+.mytasks-tag-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: var(--gt-raio, 8px);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 0.85em;
+}
+
+.mytasks-tag-remover {
+	cursor: pointer;
+	opacity: 0.8;
+}
+
+.mytasks-tag-remover:hover {
+	opacity: 1;
+}
+
+.mytasks-tags-input {
+	width: 100%;
+}
+
+.mytasks-tags-sugestoes {
+	position: absolute;
+	z-index: 20;
+	top: 100%;
+	left: 0;
+	right: 0;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: var(--shadow-s);
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.mytasks-tag-sugestao {
+	padding: 6px 10px;
+	cursor: pointer;
+	font-size: 0.9em;
+}
+
+.mytasks-tag-sugestao:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* ---------- Calendário ---------- */
+
+.mytasks-container-aba {
+	padding: 20px 28px;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+
+.mytasks-calendario {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	flex: 1;
+	min-height: 0;
+	--gt-borda: var(--background-modifier-border-hover, var(--background-modifier-border));
+	--gt-borda-fraca: color-mix(in srgb, var(--gt-borda) 75%, transparent);
+	--gt-borda-coluna: color-mix(in srgb, var(--gt-borda) 75%, transparent);
+	--gt-raio: 10px;
+}
+
+.mytasks-calendario-alvo-soltura {
+	background: color-mix(in srgb, var(--interactive-accent) 12%, transparent) !important;
+	box-shadow: inset 0 0 0 1.5px var(--interactive-accent);
+}
+
+/* Cabeçalho */
+
+.mytasks-calendario-cabecalho {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	flex-wrap: wrap;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--gt-borda-fraca);
+}
+
+.mytasks-calendario-cabecalho-lado {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+
+.mytasks-calendario-seletor-modo {
+	cursor: pointer;
+}
+
+.mytasks-calendario-navegacao {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	background: var(--background-secondary);
+	border: 1px solid var(--gt-borda);
+	border-radius: 8px;
+	padding: 2px;
+}
+
+.mytasks-calendario-navegacao button {
+	cursor: pointer;
+	padding: 4px 10px;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	border-radius: 6px;
+	font-size: 0.85em;
+	color: var(--text-normal);
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mytasks-calendario-navegacao button:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-calendario-navegacao button:active {
+	background: var(--background-modifier-active-hover);
+}
+
+.mytasks-calendario-rotulo-periodo {
+	font-weight: 600;
+	font-size: 1.05em;
+	margin-left: 6px;
+	letter-spacing: -0.01em;
+}
+
+.mytasks-calendario-grade-area {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+.mytasks-calendario-grade-area-vertical {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* Mês */
+
+.mytasks-calendario-grade-mes {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+	grid-template-rows: auto repeat(6, 1fr);
+	height: 100%;
+	min-height: 640px;
+	border-top: 1px solid var(--gt-borda-fraca);
+	border-left: 1px solid var(--gt-borda-fraca);
+	border-radius: var(--gt-raio);
+	overflow: hidden;
+}
+
+.mytasks-calendario-cabecalho-dia-semana {
+	text-align: center;
+	font-size: 0.7em;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	text-transform: capitalize;
+	color: var(--text-faint);
+	padding: 6px 0;
+	background: var(--background-primary);
+	border-right: 1px solid var(--gt-borda-fraca);
+	border-bottom: 1px solid var(--gt-borda-fraca);
+}
+
+.mytasks-calendario-celula-dia {
+	position: relative;
+	min-height: 96px;
+	height: 100%;
+	padding: 6px;
+	background: var(--background-primary);
+	border-right: 1px solid var(--gt-borda-fraca);
+	border-bottom: 1px solid var(--gt-borda-fraca);
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+/* As 7 primeiras divs da grade são o cabeçalho dos dias da semana; nth-child conta entre
+   todos os irmãos (não só os que casam o seletor), então a 1ª coluna de células de dia
+   cai nas posições 8, 15, 22... = 7n + 8. */
+.mytasks-calendario-celula-dia:nth-child(7n + 8) {
+	border-left: 1px solid var(--gt-borda-fraca);
+	margin-left: -1px;
+}
+
+.mytasks-calendario-celula-dia:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-calendario-fora-do-mes {
+	background: var(--background-primary);
+	opacity: 0.35;
+}
+
+.mytasks-calendario-fora-do-mes:hover {
+	opacity: 0.6;
+}
+
+.mytasks-calendario-hoje {
+	background: var(--background-primary);
+}
+
+.mytasks-calendario-numero-dia {
+	font-size: 0.78em;
+	font-weight: 500;
+	color: var(--text-muted);
+	margin: 0 auto 4px auto;
+	width: 20px;
+	height: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+}
+
+.mytasks-calendario-hoje .mytasks-calendario-numero-dia {
+	color: var(--interactive-accent);
+	font-weight: 700;
+}
+
+.mytasks-calendario-separador-cabecalho {
+	color: var(--text-faint);
+}
+
+.mytasks-calendario-hoje .mytasks-calendario-cabecalho-coluna .mytasks-calendario-separador-cabecalho {
+	color: var(--interactive-accent);
+}
+
+.mytasks-calendario-lista-dia {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.mytasks-calendario-lista-dia .mytasks-item {
+	padding: 3px 6px;
+	border-radius: 5px;
+	font-size: 0.78em;
+	gap: 5px;
+	background: var(--background-secondary);
+	border: 1px solid var(--gt-borda-fraca);
+}
+
+.mytasks-calendario-lista-dia .mytasks-item input[type="checkbox"] {
+	width: 14px;
+	height: 14px;
+	margin: 0;
+	flex-shrink: 0;
+}
+
+.mytasks-calendario-lista-dia .mytasks-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-calendario-mais {
+	font-size: 0.72em;
+	font-weight: 500;
+	color: var(--text-muted);
+	padding: 2px 6px;
+}
+
+.mytasks-calendario-detalhe-dia {
+	position: absolute;
+	z-index: 30;
+	top: 100%;
+	left: 0;
+	min-width: 240px;
+	max-height: 300px;
+	overflow-y: auto;
+	background: var(--background-primary);
+	border: 1px solid var(--gt-borda);
+	border-radius: 8px;
+	box-shadow: var(--shadow-l, 0 8px 24px rgba(0, 0, 0, 0.16));
+	padding: 8px;
+	cursor: default;
+}
+
+/* Semana - kanban por dia */
+
+.mytasks-calendario-grade-semana-kanban {
+	display: grid;
+	grid-template-columns: repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
+	gap: 0;
+	height: 100%;
+	min-height: 640px;
+	border-top: 1px solid var(--gt-borda-fraca);
+	border-left: 1px solid var(--gt-borda-fraca);
+	border-radius: var(--gt-raio);
+	overflow: hidden;
+}
+
+.mytasks-calendario-coluna-dia {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 8px;
+	background: var(--background-primary);
+	border-right: 1px solid var(--gt-borda-coluna);
+	min-height: 200px;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-calendario-coluna-dia.mytasks-calendario-hoje {
+	background: color-mix(in srgb, var(--interactive-accent) 5%, var(--background-primary));
+}
+
+.mytasks-calendario-cabecalho-coluna {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	font-size: 0.78em;
+	font-weight: 500;
+	color: var(--text-muted);
+	padding-bottom: 6px;
+	border-bottom: 2px solid var(--gt-borda-coluna);
+	margin-bottom: 3px;
+}
+
+.mytasks-calendario-cabecalho-coluna .mytasks-calendario-numero-dia {
+	margin: 0;
+	width: auto;
+	height: auto;
+	border-radius: 0;
+}
+
+.mytasks-calendario-hoje .mytasks-calendario-cabecalho-coluna {
+	color: var(--interactive-accent);
+	font-weight: 700;
+}
+
+/* Semana - com horários */
+
+.mytasks-calendario-cabecalho-semana-horarios {
+	display: grid;
+	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
+	padding-bottom: 8px;
+	margin-bottom: 4px;
+	border-bottom: 2px solid var(--gt-borda-coluna);
+	overflow-y: hidden;
+	scrollbar-gutter: stable;
+}
+
+.mytasks-calendario-cabecalho-semana-horarios .mytasks-calendario-cabecalho-coluna {
+	border-right: 1px solid var(--gt-borda-coluna);
+	border-bottom: none;
+	padding-bottom: 0;
+	margin-bottom: 0;
+}
+
+.mytasks-calendario-faixa-dia-inteiro {
+	display: grid;
+	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
+	padding-bottom: 3px;
+	margin-bottom: 2px;
+	border-bottom: 2px solid var(--gt-borda-coluna);
+	overflow-y: hidden;
+	scrollbar-gutter: stable;
+}
+
+.mytasks-calendario-rotulo-faixa {
+	font-size: 0.68em;
+	color: var(--text-faint);
+	display: flex;
+	align-items: center;
+}
+
+.mytasks-calendario-celula-dia-inteiro {
+	min-height: 24px;
+	padding: 2px;
+	background: var(--background-primary);
+	border-right: 1px solid var(--gt-borda-coluna);
+}
+
+.mytasks-calendario-scroll-horas {
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	flex: 1;
+	min-height: 0;
+}
+
+.mytasks-calendario-grade-horas {
+	display: grid;
+	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
+	grid-auto-rows: var(--mytasks-altura-hora, 48px);
+}
+
+.mytasks-calendario-rotulo-hora {
+	font-size: 0.68em;
+	color: var(--text-faint);
+	text-align: right;
+	padding-right: 6px;
+	transform: translateY(-0.6em);
+}
+
+.mytasks-calendario-celula-hora {
+	border-top: 1px solid var(--gt-borda-fraca);
+	border-right: 1px solid var(--gt-borda-coluna);
+	padding: 2px 3px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-calendario-celula-hora:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-calendario-celula-hora .mytasks-item,
+.mytasks-calendario-celula-dia-inteiro .mytasks-item {
+	padding: 3px 5px;
+	border-radius: 5px;
+	font-size: 0.78em;
+	gap: 4px;
+	background: var(--background-primary-alt, var(--background-primary));
+	border: 1px solid var(--gt-borda-fraca);
+}
+
+.mytasks-calendario-celula-hora .mytasks-titulo,
+.mytasks-calendario-celula-dia-inteiro .mytasks-titulo {
+	font-size: 1.09em;
+}
+
+.mytasks-calendario-celula-hora .mytasks-meta,
+.mytasks-calendario-celula-dia-inteiro .mytasks-meta {
+	font-size: 0.96em;
+}
+
+.mytasks-calendario-coluna-dia .mytasks-item {
+	font-size: 0.78em;
+}
+
+.mytasks-calendario-coluna-dia .mytasks-titulo {
+	font-size: 1.09em;
+}
+
+.mytasks-calendario-coluna-dia .mytasks-meta {
+	font-size: 0.96em;
+}
+
+/* Ano */
+
+.mytasks-calendario-grade-ano {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	gap: 20px;
+}
+
+.mytasks-calendario-mini-mes h4 {
+	margin: 0 0 6px 0;
+	font-size: 0.82em;
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.mytasks-calendario-mini-grade {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+
+.mytasks-calendario-mini-celula,
+.mytasks-calendario-mini-celula-vazia {
+	aspect-ratio: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.64em;
+	color: var(--text-muted);
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-calendario-mini-celula:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-calendario-mini-celula-vazia {
+	cursor: default;
+}
+
+.mytasks-calendario-mini-celula.mytasks-calendario-hoje {
+	box-shadow: inset 0 0 0 1.5px var(--interactive-accent);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.mytasks-calendario-mini-com-tarefas {
+	background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+	color: var(--text-normal);
+	font-weight: 600;
+}
+
+.mytasks-calendario-mini-com-tarefas:hover {
+	background: color-mix(in srgb, var(--interactive-accent) 28%, transparent);
+}
+
+/* ---------- Kanban ---------- */
+
+.mytasks-kanban {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	--gt-borda: var(--background-modifier-border-hover, var(--background-modifier-border));
+	--gt-borda-fraca: color-mix(in srgb, var(--gt-borda) 75%, transparent);
+	--gt-borda-coluna: color-mix(in srgb, var(--gt-borda) 75%, transparent);
+	--gt-raio: 10px;
+}
+
+.mytasks-kanban-grade {
+	display: flex;
+	align-items: stretch;
+	gap: 0;
+	flex: 1;
+	min-height: 0;
+	overflow-x: auto;
+	border-top: 1px solid var(--gt-borda-fraca);
+	border-left: 1px solid var(--gt-borda-fraca);
+	border-radius: var(--gt-raio);
+}
+
+.mytasks-kanban-coluna {
+	display: flex;
+	flex-direction: column;
+	align-self: stretch;
+	min-width: 220px;
+	min-height: 200px;
+	flex: 1 0 0;
+	padding: 8px;
+	background: var(--background-primary);
+	border-right: 1px solid var(--gt-borda-coluna);
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-kanban-cabecalho-coluna {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	padding-bottom: 6px;
+	margin-bottom: 8px;
+	border-bottom: 2px solid var(--mytasks-cor-coluna, var(--gt-borda-coluna));
+}
+
+.mytasks-kanban-titulo-coluna {
+	font-size: 0.82em;
+	font-weight: 600;
+	color: var(--mytasks-cor-coluna, var(--text-normal));
+}
+
+.mytasks-kanban-contagem-coluna {
+	font-size: 0.72em;
+	color: var(--text-muted);
+	background: var(--background-secondary);
+	border-radius: 999px;
+	padding: 1px 7px;
+}
+
+.mytasks-kanban-lista-coluna {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: 1;
+	min-height: 60px;
+}
+
+.mytasks-kanban-alvo-soltura {
+	background: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+}

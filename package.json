@@ -1,0 +1,19 @@
+{
+	"name": "my-tasks",
+	"version": "0.1.0",
+	"description": "Plugin Obsidian de gestão de tarefas em português (kanban, calendário, lista, recorrência)",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "node esbuild.config.mjs production"
+	},
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "^0.20.0",
+		"obsidian": "latest",
+		"tslib": "^2.6.2",
+		"typescript": "^5.3.3"
+	}
+}
