@@ -107,6 +107,9 @@
 }
 
 .mytasks-toggle-inbox button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	border: none;
 	background: transparent;
 	padding: 3px 10px;
@@ -120,6 +123,11 @@
 	background: var(--background-primary);
 	color: var(--text-normal);
 	font-weight: 600;
+}
+
+.mytasks-toggle-inbox button svg {
+	width: 14px;
+	height: 14px;
 }
 
 .mytasks-captura-rapida {
@@ -289,7 +297,8 @@
 	font-size: 0.85em;
 }
 
-.mytasks-seletor-discreto {
+.mytasks-seletor-discreto,
+.mytasks-calendario-seletor-modo {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
@@ -298,7 +307,7 @@
 .mytasks-seletor-discreto-icone {
 	display: inline-flex;
 	align-items: center;
-	color: var(--text-faint);
+	color: var(--text-muted);
 }
 
 .mytasks-seletor-discreto-icone svg,
@@ -315,7 +324,7 @@
 .mytasks-seletor-discreto-chevron {
 	display: inline-flex;
 	align-items: center;
-	color: var(--text-faint);
+	color: var(--text-muted);
 }
 
 .mytasks-cor-linha .setting-item-name {

@@ -11,6 +11,7 @@ interface ConfigBlocoKanban {
 export interface BlocoKanbanCompilado {
 	agrupamento: TipoAgrupamento;
 	filtro: (tarefa: Tarefa) => boolean;
+	filtrosExtrasIds: string[];
 }
 
 function agrupamentoValido(valor: string | undefined, configuracoes: ConfiguracoesGestorTarefas): TipoAgrupamento {
@@ -45,5 +46,6 @@ export function compilarBlocoKanban(
 	return {
 		agrupamento,
 		filtro: compilarFiltro(condicoes, app, sourcePath, configuracoes),
+		filtrosExtrasIds: config.filtro ? [] : viewSalva?.filtrosExtrasIds ?? [],
 	};
 }

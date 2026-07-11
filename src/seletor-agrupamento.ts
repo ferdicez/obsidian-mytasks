@@ -25,7 +25,7 @@ export class SeletorAgrupamento {
 
 		const botao = container.createEl("button", { cls: "mytasks-seletor-discreto" });
 		const icone = botao.createSpan({ cls: "mytasks-seletor-discreto-icone" });
-		setIcon(icone, "layout-list");
+		setIcon(icone, "layout-grid");
 		this.botaoTexto = botao.createSpan({ cls: "mytasks-seletor-discreto-texto" });
 		this.atualizarTexto();
 		const chevron = botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });

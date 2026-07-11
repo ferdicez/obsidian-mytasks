@@ -20,6 +20,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 	private condicoes: CondicaoFiltro[];
 	private agrupamento: TipoAgrupamento;
 	private modoCalendario: ModoCalendario;
+	private filtrosExtrasIds: string[];
 	private divCodigoEmbed?: HTMLElement;
 
 	constructor(
@@ -35,6 +36,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 		this.condicoes = (visualizacaoExistente?.condicoes ?? []).map((c) => ({ ...c, valores: [...c.valores] }));
 		this.agrupamento = visualizacaoExistente?.agrupamento ?? (this.tipoView === "kanban" ? ID_STATUS : "nenhum");
 		this.modoCalendario = visualizacaoExistente?.modoCalendario ?? "mes";
+		this.filtrosExtrasIds = [...(visualizacaoExistente?.filtrosExtrasIds ?? [])];
 	}
 
 	onOpen(): void {
@@ -77,6 +79,13 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 		});
 
 		if (this.tipoView !== "calendario") {
+			contentEl.createEl("h3", { text: "Filtro móvel (opcional)" });
+			contentEl.createEl("p", {
+				text: "Escolha quais Filtros salvos ficam disponíveis para ligar/desligar na hora, quando esta visualização estiver embutida numa nota — eles se somam ao filtro fixo acima, sem substituí-lo.",
+				cls: "setting-item-description",
+			});
+			this.renderizarFiltrosExtras(contentEl);
+
 			contentEl.createEl("h3", { text: "Código para embutir na nota" });
 			this.divCodigoEmbed = contentEl.createEl("pre");
 			this.atualizarCodigoEmbed();
@@ -103,6 +112,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 						condicoes: this.condicoes,
 						agrupamento: this.tipoView === "calendario" ? undefined : this.agrupamento,
 						modoCalendario: this.tipoView === "calendario" ? this.modoCalendario : undefined,
+						filtrosExtrasIds: this.tipoView === "calendario" ? undefined : this.filtrosExtrasIds,
 					});
 					this.close();
 				})
@@ -139,6 +149,29 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 				this.atualizarCodigoEmbed();
 			});
 		});
+	}
+
+	private renderizarFiltrosExtras(container: HTMLElement): void {
+		const filtrosSalvos = this.configuracoes.filtrosSalvos;
+		if (filtrosSalvos.length === 0) {
+			container.createEl("p", {
+				text: "Nenhum filtro cadastrado ainda — crie em Configurações → Filtros para poder disponibilizá-lo aqui.",
+				cls: "setting-item-description",
+			});
+			return;
+		}
+
+		for (const filtro of filtrosSalvos) {
+			new Setting(container).setName(filtro.nome).addToggle((toggle) =>
+				toggle.setValue(this.filtrosExtrasIds.includes(filtro.id)).onChange((valor) => {
+					if (valor) {
+						if (!this.filtrosExtrasIds.includes(filtro.id)) this.filtrosExtrasIds.push(filtro.id);
+					} else {
+						this.filtrosExtrasIds = this.filtrosExtrasIds.filter((id) => id !== filtro.id);
+					}
+				})
+			);
+		}
 	}
 
 	private gerarCodigoEmbed(): string {

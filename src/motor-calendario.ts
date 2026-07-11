@@ -1,4 +1,4 @@
-import { App, Menu } from "obsidian";
+import { App, Menu, setIcon } from "obsidian";
 import { ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, Tarefa } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
@@ -121,10 +121,14 @@ export class MotorCalendario {
 		ladoEsquerdo.createEl("span", { text: this.rotuloPeriodo(), cls: "mytasks-calendario-rotulo-periodo" });
 
 		if (this.opcoes.permitirTrocaModo !== false) {
-			const botaoSeletorModo = cabecalho.createEl("button", {
+			const botaoSeletorModo = cabecalho.createEl("button", { cls: "mytasks-calendario-seletor-modo" });
+			const textoSeletorModo = botaoSeletorModo.createSpan({
+				cls: "mytasks-seletor-discreto-texto",
 				text: ROTULOS_MODO[this.modo],
-				cls: "mytasks-calendario-seletor-modo",
 			});
+			const chevron = botaoSeletorModo.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
+			setIcon(chevron, "chevrons-up-down");
+
 			botaoSeletorModo.addEventListener("click", (evento) => {
 				const menu = new Menu();
 				for (const chave of Object.keys(ROTULOS_MODO) as ModoCalendario[]) {
@@ -134,6 +138,7 @@ export class MotorCalendario {
 							.setChecked(chave === this.modo)
 							.onClick(() => {
 								this.modo = chave;
+								textoSeletorModo.setText(ROTULOS_MODO[this.modo]);
 								this.renderizar();
 							})
 					);

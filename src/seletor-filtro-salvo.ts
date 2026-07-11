@@ -5,6 +5,8 @@ export interface OpcoesSeletorFiltroSalvo {
 	configuracoes: ConfiguracoesGestorTarefas;
 	filtroAtualId: string | null;
 	aoEscolher: (filtroId: string | null, condicoes: CondicaoFiltro[]) => void;
+	// Restringe as opções do menu a estes IDs (ex: "filtro móvel" de uma visualização embutida). Sem isso, mostra todos os Filtros salvos.
+	restringirAIds?: string[];
 }
 
 export class SeletorFiltroSalvo {
@@ -25,12 +27,18 @@ export class SeletorFiltroSalvo {
 		botao.addEventListener("click", (evento) => this.abrirMenu(evento));
 	}
 
+	private opcoesDisponiveis() {
+		const { filtrosSalvos } = this.opcoes.configuracoes;
+		if (!this.opcoes.restringirAIds) return filtrosSalvos;
+		return filtrosSalvos.filter((f) => this.opcoes.restringirAIds!.includes(f.id));
+	}
+
 	private atualizarTexto(): void {
 		if (!this.filtroAtualId) {
 			this.botaoTexto.setText("Sem filtro");
 			return;
 		}
-		const filtro = this.opcoes.configuracoes.filtrosSalvos.find((f) => f.id === this.filtroAtualId);
+		const filtro = this.opcoesDisponiveis().find((f) => f.id === this.filtroAtualId);
 		this.botaoTexto.setText(filtro?.nome ?? "Sem filtro");
 	}
 
@@ -46,7 +54,7 @@ export class SeletorFiltroSalvo {
 					this.opcoes.aoEscolher(null, []);
 				})
 		);
-		for (const filtro of this.opcoes.configuracoes.filtrosSalvos) {
+		for (const filtro of this.opcoesDisponiveis()) {
 			menu.addItem((item) =>
 				item
 					.setTitle(filtro.nome)

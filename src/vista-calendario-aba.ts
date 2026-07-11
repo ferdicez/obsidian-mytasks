@@ -1,6 +1,6 @@
 import { ItemView, TAbstractFile, WorkspaceLeaf } from "obsidian";
 import { RepositorioTarefas } from "./repositorio-tarefas";
-import { ConfiguracoesGestorTarefas } from "./tipos";
+import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
 import { MotorCalendario } from "./motor-calendario";
 
 export const TIPO_VISTA_CALENDARIO_ABA = "mytasks-calendario-aba";
@@ -50,8 +50,7 @@ export class VistaCalendarioAba extends ItemView {
 	}
 
 	private arquivoRelevante(arquivo: TAbstractFile): boolean {
-		const pasta = this.configuracoes.pastaTarefas;
-		return arquivo.path.startsWith(pasta + "/") || arquivo.parent?.path === pasta;
+		return arquivoEhTarefaRelevante(this.configuracoes, arquivo.path);
 	}
 
 	async onClose() {

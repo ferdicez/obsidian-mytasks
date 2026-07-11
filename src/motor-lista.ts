@@ -19,6 +19,9 @@ export interface OpcoesMotorLista {
 	permitirEdicaoFiltro?: boolean;
 	permitirCriarTarefa?: boolean;
 	mostrarToggleInbox?: boolean;
+	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
+	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento da Lista/Kanban geral).
+	filtrosExtrasIds?: string[];
 }
 
 export class MotorLista {
@@ -130,16 +133,17 @@ export class MotorLista {
 
 		if (this.opcoes.mostrarToggleInbox) {
 			const toggle = cabecalho.createDiv({ cls: "mytasks-toggle-inbox" });
+			const botaoInbox = toggle.createEl("button", { attr: { "aria-label": "Inbox" } });
+			setIcon(botaoInbox, "inbox");
 			const botaoTarefas = toggle.createEl("button", { text: "Tarefas" });
-			const botaoInbox = toggle.createEl("button", { text: "Inbox" });
-			botaoTarefas.toggleClass("mytasks-toggle-ativo", this.modo === "tarefas");
 			botaoInbox.toggleClass("mytasks-toggle-ativo", this.modo === "inbox");
-			botaoTarefas.addEventListener("click", () => {
-				this.modo = "tarefas";
-				this.renderizar();
-			});
+			botaoTarefas.toggleClass("mytasks-toggle-ativo", this.modo === "tarefas");
 			botaoInbox.addEventListener("click", () => {
 				this.modo = "inbox";
+				this.renderizar();
+			});
+			botaoTarefas.addEventListener("click", () => {
+				this.modo = "tarefas";
 				this.renderizar();
 			});
 		}
@@ -178,10 +182,12 @@ export class MotorLista {
 			});
 		}
 
-		if (this.opcoes.permitirEdicaoFiltro !== false) {
+		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
+		if (this.opcoes.permitirEdicaoFiltro !== false && !filtroMovelVazio) {
 			new SeletorFiltroSalvo(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
 				filtroAtualId: this.filtroSalvoId,
+				restringirAIds: this.opcoes.filtrosExtrasIds,
 				aoEscolher: (filtroId, condicoes) => {
 					this.filtroSalvoId = filtroId;
 					this.condicoesFiltro = condicoes;

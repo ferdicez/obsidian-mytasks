@@ -93,6 +93,9 @@ export interface VisualizacaoSalva {
 	condicoes: CondicaoFiltro[];
 	agrupamento?: TipoAgrupamento;
 	modoCalendario?: ModoCalendario;
+	// IDs de Filtros salvos (Configurações → Filtros) disponíveis como filtro extra opcional quando
+	// esta visualização está embutida numa nota — soma-se (E lógico) ao filtro fixo (`condicoes`) acima.
+	filtrosExtrasIds?: string[];
 }
 
 // Filtro pré-configurado, escolhível na barrinha de Filtro da Lista/Kanban gerais (sidebar e aba) — diferente de VisualizacaoSalva, que é para embutir em notas.
@@ -154,12 +157,12 @@ export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
 	calendarioPropriedadesVisiveisPorModo: {
 		mes: [],
 		"semana-horarios": [],
-		"semana-kanban": null,
+		"semana-kanban": [],
 		ano: [],
 	},
-	kanbanPropriedadesVisiveis: null,
-	listaPropriedadesVisiveis: null,
-	listaInboxPropriedadesVisiveis: null,
+	kanbanPropriedadesVisiveis: [],
+	listaPropriedadesVisiveis: [],
+	listaInboxPropriedadesVisiveis: [],
 	visualizacoesSalvas: [],
 	filtrosSalvos: [],
 };
@@ -224,6 +227,20 @@ export function opcaoStatusComData(status: ConfigStatus): string | undefined {
 // Regra posicional (mesmo padrão de ultimaOpcaoStatus = "concluído"): Inbox é sempre a primeira opção de Status.
 export function estaNoInbox(tarefa: Tarefa, configuracoes: ConfiguracoesGestorTarefas): boolean {
 	return tarefa.status === primeiraOpcaoStatus(configuracoes.status);
+}
+
+function dentroDeUmaPasta(caminhoArquivo: string, pasta: string): boolean {
+	return caminhoArquivo === pasta || caminhoArquivo.startsWith(pasta + "/");
+}
+
+// Um arquivo conta como tarefa se estiver na pasta de Tarefas, OU na pasta de Concluídas (quando
+// "mover concluídas" está ativo) — tarefas concluídas continuam aparecendo na Lista/Kanban mesmo
+// movidas de pasta; só um filtro ativo deve escondê-las, não a localização física do arquivo.
+export function arquivoEhTarefaRelevante(configuracoes: ConfiguracoesGestorTarefas, caminhoArquivo: string): boolean {
+	const { pastaTarefas, moverConcluidas, pastaConcluidas } = configuracoes;
+	if (dentroDeUmaPasta(caminhoArquivo, pastaTarefas)) return true;
+	if (moverConcluidas && pastaConcluidas && dentroDeUmaPasta(caminhoArquivo, pastaConcluidas)) return true;
+	return false;
 }
 
 function corDaPropriedade(tarefa: Tarefa, configuracoes: ConfiguracoesGestorTarefas, propriedadeId: string): string | null {

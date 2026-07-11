@@ -1,6 +1,6 @@
 import { ItemView, TAbstractFile, WorkspaceLeaf } from "obsidian";
 import { RepositorioTarefas } from "./repositorio-tarefas";
-import { ConfiguracoesGestorTarefas } from "./tipos";
+import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
 import { MotorLista } from "./motor-lista";
 
 export const TIPO_VISTA_LISTA = "mytasks-lista";
@@ -48,8 +48,7 @@ export class VistaLista extends ItemView {
 	}
 
 	private arquivoRelevante(arquivo: TAbstractFile): boolean {
-		const pasta = this.configuracoes.pastaTarefas;
-		return arquivo.path.startsWith(pasta + "/") || arquivo.parent?.path === pasta;
+		return arquivoEhTarefaRelevante(this.configuracoes, arquivo.path);
 	}
 
 	async onClose() {

@@ -1,5 +1,5 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TAbstractFile, TFile } from "obsidian";
-import { ConfiguracoesGestorTarefas } from "./tipos";
+import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { MotorLista } from "./motor-lista";
 import { compilarBlocoLista } from "./filtro-lista";
@@ -25,6 +25,7 @@ class EmbedLista extends MarkdownRenderChild {
 			configuracoes: obterConfiguracoes(),
 			agrupamentoInicial: compilado.agrupamento,
 			filtro: compilado.filtro,
+			filtrosExtrasIds: compilado.filtrosExtrasIds,
 			permitirTrocaAgrupamento: false,
 			permitirCriarTarefa: false,
 		});
@@ -45,8 +46,7 @@ class EmbedLista extends MarkdownRenderChild {
 
 	private arquivoRelevante(arquivo: TAbstractFile): boolean {
 		if (!(arquivo instanceof TFile)) return false;
-		const pasta = this.obterConfiguracoes().pastaTarefas;
-		return arquivo.path.startsWith(pasta + "/") || arquivo.parent?.path === pasta;
+		return arquivoEhTarefaRelevante(this.obterConfiguracoes(), arquivo.path);
 	}
 }
 

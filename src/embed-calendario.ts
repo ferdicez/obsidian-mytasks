@@ -1,5 +1,5 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TAbstractFile, TFile } from "obsidian";
-import { ConfiguracoesGestorTarefas } from "./tipos";
+import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { MotorCalendario } from "./motor-calendario";
 import { compilarBlocoCalendario } from "./filtro-calendario";
@@ -44,8 +44,7 @@ class EmbedCalendario extends MarkdownRenderChild {
 
 	private arquivoRelevante(arquivo: TAbstractFile): boolean {
 		if (!(arquivo instanceof TFile)) return false;
-		const pasta = this.obterConfiguracoes().pastaTarefas;
-		return arquivo.path.startsWith(pasta + "/") || arquivo.parent?.path === pasta;
+		return arquivoEhTarefaRelevante(this.obterConfiguracoes(), arquivo.path);
 	}
 }
 

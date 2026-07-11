@@ -5,6 +5,7 @@ import {
 	Recorrencia,
 	REGEX_HORARIO,
 	Tarefa,
+	arquivoEhTarefaRelevante,
 	opcaoStatusComData,
 	primeiraOpcaoStatus,
 	ultimaOpcaoStatus,
@@ -56,10 +57,8 @@ export class RepositorioTarefas {
 	}
 
 	listarTarefas(): Tarefa[] {
-		const caminhoPasta = normalizePath(this.obterConfiguracoes().pastaTarefas);
-		const arquivos = this.app.vault
-			.getMarkdownFiles()
-			.filter((f) => f.path.startsWith(caminhoPasta + "/") || f.parent?.path === caminhoPasta);
+		const configuracoes = this.obterConfiguracoes();
+		const arquivos = this.app.vault.getMarkdownFiles().filter((f) => arquivoEhTarefaRelevante(configuracoes, f.path));
 
 		const tarefas: Tarefa[] = [];
 		for (const arquivo of arquivos) {
