@@ -139,7 +139,7 @@ export class MotorCalendario {
 
 		ladoEsquerdo.createEl("span", { text: this.rotuloPeriodo(), cls: "mytasks-calendario-rotulo-periodo" });
 
-		const ladoDireito = cabecalho.createDiv({ cls: "mytasks-calendario-cabecalho-lado" });
+		const ladoDireito = cabecalho.createDiv({ cls: "mytasks-calendario-cabecalho-lado mytasks-calendario-cabecalho-lado-direito" });
 
 		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
 		if (this.opcoes.permitirEdicaoFiltro !== false && !filtroMovelVazio) {

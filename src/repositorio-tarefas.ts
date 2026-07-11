@@ -227,6 +227,13 @@ export class RepositorioTarefas {
 			return;
 		}
 
+		// Tarefa não recorrente com "manter registro" desligado: concluir apaga o arquivo, sem deixar
+		// nada no histórico (nem move para a pasta de Concluídas). Vale para qualquer tarefa, não só recorrentes.
+		if (tarefa.recorrencia === "nenhuma" && !tarefa.manterHistorico) {
+			await this.app.vault.delete(arquivo);
+			return;
+		}
+
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			fm.status_anterior = tarefa.status;
 			fm.status = novoStatus;

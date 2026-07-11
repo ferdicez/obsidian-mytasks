@@ -127,6 +127,15 @@ export class ModalNovaTarefa extends Modal {
 			this.renderizarCampo(contentEl, def);
 		}
 
+		// Aparece sempre (qualquer tarefa, recorrente ou não): se desligado, concluir apaga o arquivo
+		// em vez de deixar registro. Em tarefas recorrentes, isso também vale ao gerar a próxima ocorrência.
+		new Setting(contentEl)
+			.setName("Manter registro ao concluir")
+			.setDesc("Se desligado, o arquivo da tarefa é apagado ao concluí-la (não fica no histórico).")
+			.addToggle((toggle) =>
+				toggle.setValue(this.manterHistorico).onChange((valor) => (this.manterHistorico = valor))
+			);
+
 		this.divCamposComData = contentEl.createDiv();
 		this.divCamposComData.toggle(!!this.data);
 
@@ -142,13 +151,6 @@ export class ModalNovaTarefa extends Modal {
 
 		const divRecorrencia = this.divCamposComData.createDiv();
 		divRecorrencia.toggle(this.recorrencia !== "nenhuma");
-
-		new Setting(divRecorrencia)
-			.setName("Manter histórico ao repetir")
-			.setDesc("Se desligado, o arquivo antigo é apagado ao gerar a próxima ocorrência.")
-			.addToggle((toggle) =>
-				toggle.setValue(this.manterHistorico).onChange((valor) => (this.manterHistorico = valor))
-			);
 
 		new Setting(divRecorrencia)
 			.setName("Repetir até")

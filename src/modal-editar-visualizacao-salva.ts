@@ -43,6 +43,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
+		contentEl.addClass("mytasks-modal-filtro");
 		contentEl.createEl("h2", {
 			text: this.visualizacaoExistente ? "Editar visualização" : "Nova visualização",
 		});

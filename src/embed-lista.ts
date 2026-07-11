@@ -28,7 +28,7 @@ class EmbedLista extends MarkdownRenderChild {
 			filtrosExtrasIds: compilado.filtrosExtrasIds,
 			filtroInicialId: compilado.filtroExtraPadraoId,
 			permitirTrocaAgrupamento: false,
-			permitirCriarTarefa: false,
+			alinharControlesADireita: true,
 		});
 	}
 

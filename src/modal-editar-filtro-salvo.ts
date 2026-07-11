@@ -26,6 +26,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
+		contentEl.addClass("mytasks-modal-filtro");
 		contentEl.createEl("h2", { text: this.filtroExistente ? "Editar filtro" : "Novo filtro" });
 
 		new Setting(contentEl).setName("Nome").addText((text) =>

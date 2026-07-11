@@ -1,5 +1,14 @@
 import { App, Menu, Setting, TFile } from "obsidian";
-import { AncoraPeriodo, CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, OperadorPeriodo, PeriodoFiltro } from "./tipos";
+import {
+	AncoraPeriodo,
+	CombinacaoPeriodos,
+	CondicaoFiltro,
+	ConfiguracoesGestorTarefas,
+	ID_STATUS,
+	OperadorPeriodo,
+	PeriodoFiltro,
+	periodosDaCondicao,
+} from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { CampoTags } from "./campo-tags";
 import { SugestorArquivos } from "./sugestor-arquivos";
@@ -164,75 +173,110 @@ export class ConstrutorFiltro {
 
 	private renderizarCampoPeriodo(container: HTMLElement, propriedadeId: string): void {
 		const condicaoAtual = this.condicoes.find((c) => c.propriedadeId === propriedadeId);
-		const periodoAtual = condicaoAtual?.periodo ?? null;
+		// Trabalha sempre sobre uma lista de períodos (normalizando o legado `periodo` único).
+		const periodos = condicaoAtual ? periodosDaCondicao(condicaoAtual) : [];
 
-		const removerCondicao = () => {
-			if (!condicaoAtual) return;
-			const indice = this.condicoes.indexOf(condicaoAtual);
-			if (indice >= 0) this.condicoes.splice(indice, 1);
-		};
-
-		const aplicar = (periodo: PeriodoFiltro | null) => {
-			if (!periodo) {
-				removerCondicao();
+		const persistir = () => {
+			if (periodos.length === 0) {
+				if (condicaoAtual) {
+					const indice = this.condicoes.indexOf(condicaoAtual);
+					if (indice >= 0) this.condicoes.splice(indice, 1);
+				}
 				this.emitirMudanca();
 				return;
 			}
 			const condicao = condicaoAtual ?? { propriedadeId, operador: "periodo" as const, valores: [] };
 			condicao.operador = "periodo";
-			condicao.periodo = periodo;
+			condicao.periodos = periodos;
+			delete condicao.periodo; // migra do formato antigo (único) para a lista
+			condicao.combinacaoPeriodos = condicao.combinacaoPeriodos ?? "ou";
 			if (!this.condicoes.includes(condicao)) this.condicoes.push(condicao);
 			this.emitirMudanca();
 		};
 
-		new Setting(container).setName("período").addDropdown((dropdown) => {
-			dropdown.addOption("nenhum", "nenhum");
+		periodos.forEach((periodo, indicePeriodo) => {
+			// O seletor E/OU vai ENTRE um prazo e o seguinte (antes de cada período a partir do 2º).
+			if (indicePeriodo > 0 && condicaoAtual) {
+				new Setting(container).setName("combinar prazos").addDropdown((dropdown) => {
+					dropdown.addOption("ou", "OU");
+					dropdown.addOption("e", "E");
+					dropdown.setValue(condicaoAtual.combinacaoPeriodos ?? "ou").onChange((valor) => {
+						condicaoAtual.combinacaoPeriodos = valor as CombinacaoPeriodos;
+						this.notificarMudanca();
+					});
+				});
+			}
+			this.renderizarUmPeriodo(container, periodos, periodo, indicePeriodo, persistir);
+		});
+
+		new Setting(container).addButton((btn) =>
+			btn.setButtonText("+ adicionar prazo").onClick(() => {
+				const operador: OperadorPeriodo = "referente-a";
+				periodos.push({ operador, ancora: ANCORAS_POR_OPERADOR[operador][0].valor });
+				persistir();
+			})
+		);
+	}
+
+	private renderizarUmPeriodo(
+		container: HTMLElement,
+		periodos: PeriodoFiltro[],
+		periodo: PeriodoFiltro,
+		indicePeriodo: number,
+		persistir: () => void
+	): void {
+		const settingOperador = new Setting(container).setName(periodos.length > 1 ? `prazo ${indicePeriodo + 1}` : "período");
+		settingOperador.addDropdown((dropdown) => {
 			for (const chave of Object.keys(ROTULOS_OPERADOR_PERIODO) as OperadorPeriodo[]) {
 				dropdown.addOption(chave, ROTULOS_OPERADOR_PERIODO[chave]);
 			}
-			dropdown.setValue(periodoAtual?.operador ?? "nenhum").onChange((valor) => {
-				if (valor === "nenhum") {
-					aplicar(null);
-					return;
-				}
+			dropdown.setValue(periodo.operador).onChange((valor) => {
 				const operador = valor as OperadorPeriodo;
-				const primeiraAncora = ANCORAS_POR_OPERADOR[operador][0].valor;
-				aplicar({ operador, ancora: primeiraAncora });
+				periodos[indicePeriodo] = { operador, ancora: ANCORAS_POR_OPERADOR[operador][0].valor };
+				persistir();
 			});
 		});
-
-		if (!periodoAtual) return;
+		settingOperador.addExtraButton((btn) =>
+			btn
+				.setIcon("trash")
+				.setTooltip("Remover prazo")
+				.onClick(() => {
+					periodos.splice(indicePeriodo, 1);
+					persistir();
+				})
+		);
 
 		new Setting(container).setName("quando").addDropdown((dropdown) => {
-			for (const opcao of ANCORAS_POR_OPERADOR[periodoAtual.operador]) {
+			for (const opcao of ANCORAS_POR_OPERADOR[periodo.operador]) {
 				dropdown.addOption(opcao.valor, opcao.rotulo);
 			}
-			dropdown.setValue(periodoAtual.ancora).onChange((valor) => {
-				aplicar({ ...periodoAtual, ancora: valor as AncoraPeriodo });
+			dropdown.setValue(periodo.ancora).onChange((valor) => {
+				periodos[indicePeriodo] = { ...periodo, ancora: valor as AncoraPeriodo };
+				persistir();
 			});
 		});
 
-		if (periodoAtual.ancora === "dia-especifico") {
+		if (periodo.ancora === "dia-especifico") {
 			new Setting(container).setName("data").addText((text) => {
 				text.inputEl.type = "date";
-				if (periodoAtual.dataEspecifica) text.setValue(periodoAtual.dataEspecifica);
+				if (periodo.dataEspecifica) text.setValue(periodo.dataEspecifica);
 				text.onChange((valor) => {
 					if (!valor) return;
-					aplicar({ ...periodoAtual, dataEspecifica: valor });
+					periodos[indicePeriodo] = { ...periodo, dataEspecifica: valor };
+					persistir();
 				});
 			});
 		}
 
-		if (periodoAtual.ancora === "proximos-dias" || periodoAtual.ancora === "ultimos-dias") {
+		if (periodo.ancora === "proximos-dias" || periodo.ancora === "ultimos-dias") {
 			new Setting(container).setName("quantidade de dias").addText((text) => {
 				text.inputEl.type = "number";
 				text.inputEl.min = "1";
-				text.setValue(String(periodoAtual.quantidadeDias ?? 7));
+				text.setValue(String(periodo.quantidadeDias ?? 7));
 				text.onChange((valor) => {
 					const n = Number(valor);
 					if (!Number.isFinite(n) || n <= 0) return;
-					periodoAtual.quantidadeDias = n;
-					if (condicaoAtual) condicaoAtual.periodo = periodoAtual;
+					periodo.quantidadeDias = n; // muta em lugar pra não perder o foco do campo numérico
 					this.notificarMudanca();
 				});
 			});

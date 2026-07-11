@@ -75,11 +75,24 @@ export interface PeriodoFiltro {
 	quantidadeDias?: number; // só quando ancora === "proximos-dias" | "ultimos-dias"
 }
 
+export type CombinacaoPeriodos = "e" | "ou";
+
 export interface CondicaoFiltro {
 	propriedadeId: string;
 	operador: OperadorFiltro;
 	valores: string[];
-	periodo?: PeriodoFiltro; // só quando operador === "periodo"
+	periodo?: PeriodoFiltro; // legado: um único período (mantido para migração; ver `periodos`)
+	// Vários períodos de prazo combinados entre si (só quando operador === "periodo"). "ou" = a tarefa
+	// entra se casar QUALQUER período (união, ex: próximos 30 dias OU atrasadas); "e" = precisa casar todos.
+	periodos?: PeriodoFiltro[];
+	combinacaoPeriodos?: CombinacaoPeriodos; // default "ou"
+}
+
+// Lê os períodos de uma condição normalizando o legado `periodo` (único) para a lista `periodos`.
+export function periodosDaCondicao(condicao: CondicaoFiltro): PeriodoFiltro[] {
+	if (condicao.periodos && condicao.periodos.length > 0) return condicao.periodos;
+	if (condicao.periodo) return [condicao.periodo];
+	return [];
 }
 
 export type TipoAgrupamento = "nenhum" | "dia" | string;

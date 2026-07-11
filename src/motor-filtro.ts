@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, PeriodoFiltro, Tarefa } from "./tipos";
+import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, PeriodoFiltro, Tarefa, periodosDaCondicao } from "./tipos";
 import { ID_DATA } from "./render-tarefa";
 
 function formatarDataLocal(data: Date): string {
@@ -84,8 +84,9 @@ export function compilarFiltro(
 		}
 
 		if (condicao.operador === "periodo") {
-			if (!condicao.periodo) return () => false;
-			const periodo = condicao.periodo;
+			const periodos = periodosDaCondicao(condicao);
+			if (periodos.length === 0) return () => false;
+			const combinacao = condicao.combinacaoPeriodos ?? "ou";
 			return (tarefa: Tarefa) => {
 				const valor =
 					condicao.propriedadeId === ID_DATA
@@ -93,10 +94,14 @@ export function compilarFiltro(
 						: (tarefa.propriedades[condicao.propriedadeId] as string | null);
 				if (!valor) return false;
 
-				const { limite, inicio, fim } = resolverPeriodo(periodo, new Date());
-				if (periodo.operador === "antes") return limite !== undefined && valor < limite;
-				if (periodo.operador === "depois") return limite !== undefined && valor > limite;
-				return inicio !== undefined && fim !== undefined && valor >= inicio && valor <= fim;
+				const casaPeriodo = (periodo: PeriodoFiltro) => {
+					const { limite, inicio, fim } = resolverPeriodo(periodo, new Date());
+					if (periodo.operador === "antes") return limite !== undefined && valor < limite;
+					if (periodo.operador === "depois") return limite !== undefined && valor > limite;
+					return inicio !== undefined && fim !== undefined && valor >= inicio && valor <= fim;
+				};
+
+				return combinacao === "e" ? periodos.every(casaPeriodo) : periodos.some(casaPeriodo);
 			};
 		}
 

@@ -56,6 +56,12 @@
 	margin-right: auto;
 }
 
+/* Embed em nota: sem título/toggle à esquerda, empurra o grupo de controles (Filtro + Nova tarefa)
+   para o canto direito. O primeiro controle recebe a margem automática que ocupa o espaço vago. */
+.mytasks-cabecalho-a-direita > :first-child {
+	margin-left: auto;
+}
+
 .mytasks-cabecalho button {
 	cursor: pointer;
 }
@@ -245,10 +251,26 @@
 
 .mytasks-construtor-filtro-linha {
 	margin-bottom: 8px;
+	padding-bottom: 8px;
+	/* Linha divisória fina entre um filtro e o próximo (workspace / status / prazo…). */
+	border-bottom: 1px solid var(--gt-borda-fraca, var(--background-modifier-border));
+}
+
+.mytasks-construtor-filtro-linha:last-child {
+	border-bottom: none;
+	padding-bottom: 0;
 }
 
 .mytasks-construtor-filtro-valor {
 	margin: 4px 0 4px 8px;
+}
+
+/* Divisória mais grossa entre as seções do modal (Filtro / Filtro móvel / Código),
+   marcadas pelos <h3> — separa cada seção da anterior com uma linha mais forte que a dos filtros. */
+.mytasks-modal-filtro h3 {
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 2px solid var(--background-modifier-border);
 }
 
 .mytasks-construtor-filtro-painel {
@@ -367,6 +389,13 @@
 	color: var(--text-muted);
 }
 
+/* Barra lateral (sidebar da Lista/Inbox): o título da tarefa herda 0.95em, maior que os cartões
+   do calendário na visão semanal (~0.85em final). Reduz o título aqui pra igualar — a aba
+   (.mytasks-container-aba) não é afetada, mantém o tamanho maior. */
+.mytasks-container:not(.mytasks-container-aba) .mytasks-titulo {
+	font-size: 0.85em;
+}
+
 .mytasks-campo-tags {
 	position: relative;
 	min-width: 220px;
@@ -470,6 +499,12 @@
 	display: flex;
 	align-items: center;
 	gap: 14px;
+}
+
+/* Lado direito (Filtro + seletor de modo): usa o mesmo espaçamento dos botões dos outros
+   cabeçalhos (Lista/Kanban usam gap 6px), pra manter o padrão visual entre os botões. */
+.mytasks-calendario-cabecalho-lado-direito {
+	gap: 6px;
 }
 
 .mytasks-calendario-seletor-modo {
@@ -672,9 +707,8 @@
 	gap: 0;
 	height: 100%;
 	min-height: 640px;
-	border-top: 1px solid var(--gt-borda-fraca);
-	border-left: 1px solid var(--gt-borda-fraca);
-	border-radius: var(--gt-raio);
+	/* Sem moldura externa (border-left/top/radius) — as colunas usam só o separador border-right
+	   entre elas, igual à view "Semana (horários)", pra as linhas laterais ficarem com a mesma margem. */
 	overflow: hidden;
 }
 

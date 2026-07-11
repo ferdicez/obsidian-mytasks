@@ -139,13 +139,14 @@ export class MotorKanban {
 		const cabecalho = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
 		cabecalho.createEl("h3", { text: "Kanban" });
 
+		// Sem elementoAlinhamento: os menus descem alinhados ao próprio botão clicado (igual ao
+		// Calendário), não ao início do cabeçalho — a pedido dela, pra abrir sob o botão de Filtro.
 		if (this.opcoes.permitirTrocaAgrupamento !== false) {
 			new SeletorAgrupamento(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
 				agrupamentoAtual: this.agrupamento,
 				permitirNenhum: false,
 				permitirDia: false,
-				elementoAlinhamento: cabecalho,
 				aoEscolher: (agrupamento) => {
 					this.agrupamento = agrupamento;
 					this.renderizarGrade();
@@ -159,7 +160,6 @@ export class MotorKanban {
 				configuracoes: this.opcoes.configuracoes,
 				filtroAtualId: this.filtroSalvoId,
 				restringirAIds: this.opcoes.filtrosExtrasIds,
-				elementoAlinhamento: cabecalho,
 				aoEscolher: (filtroId, condicoes) => {
 					this.filtroSalvoId = filtroId;
 					this.condicoesFiltro = condicoes;

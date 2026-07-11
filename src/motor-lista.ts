@@ -31,6 +31,9 @@ export interface OpcoesMotorLista {
 	permitirEdicaoFiltro?: boolean;
 	permitirCriarTarefa?: boolean;
 	mostrarToggleInbox?: boolean;
+	// Empurra os controles do cabeçalho (Filtro + Nova tarefa) para a direita — usado nos embeds em nota,
+	// que não têm toggle Inbox nem título à esquerda, então sem isso os controles ficariam colados à esquerda.
+	alinharControlesADireita?: boolean;
 	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
 	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento da Lista/Kanban geral).
 	filtrosExtrasIds?: string[];
@@ -164,6 +167,7 @@ export class MotorLista {
 
 	private desenharCabecalho(): void {
 		const cabecalho = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
+		if (this.opcoes.alinharControlesADireita) cabecalho.addClass("mytasks-cabecalho-a-direita");
 
 		if (this.opcoes.mostrarToggleInbox) {
 			const toggle = cabecalho.createDiv({ cls: "mytasks-toggle-inbox" });
