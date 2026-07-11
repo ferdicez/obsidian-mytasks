@@ -1,6 +1,6 @@
 {
 	"name": "my-tasks",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"description": "Plugin Obsidian de gestão de tarefas em português (kanban, calendário, lista, recorrência)",
 	"main": "main.js",
 	"scripts": {

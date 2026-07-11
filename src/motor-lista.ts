@@ -87,12 +87,17 @@ export class MotorLista {
 		return propriedadesVisiveis ? propriedades.filter((p) => propriedadesVisiveis.includes(p.id)) : propriedades;
 	}
 
+	private agrupamentoEfetivo(): TipoAgrupamento {
+		return this.modo === "inbox" ? "nenhum" : this.agrupamento;
+	}
+
 	private ocultarNaMeta(): string[] {
 		const propriedadesVisiveis = this.propriedadesVisiveisAtuais();
 		const ocultarDataEntrada = propriedadesVisiveis !== null && !propriedadesVisiveis.includes(ID_DATA_ENTRADA);
 		const ocultarStatus = propriedadesVisiveis !== null && !propriedadesVisiveis.includes(ID_STATUS);
-		const base = this.agrupamento !== "nenhum" ? [this.agrupamento] : [];
-		if (this.agrupamento === "dia") base.push(ID_DATA);
+		const agrupamento = this.agrupamentoEfetivo();
+		const base = agrupamento !== "nenhum" ? [agrupamento] : [];
+		if (agrupamento === "dia") base.push(ID_DATA);
 		if (ocultarDataEntrada) base.push(ID_DATA_ENTRADA);
 		if (ocultarStatus) base.push(ID_STATUS);
 		return base;
@@ -124,12 +129,13 @@ export class MotorLista {
 			return;
 		}
 
-		const grupos = agruparTarefas(tarefas, this.agrupamento, this.opcoes.configuracoes);
+		const agrupamentoEfetivo = this.agrupamentoEfetivo();
+		const grupos = agruparTarefas(tarefas, agrupamentoEfetivo, this.opcoes.configuracoes);
 		const areaLista = this.areaCorpo.createDiv({ cls: "mytasks-lista-area" });
 
 		for (const grupo of grupos) {
 			if (grupo.tarefas.length === 0) continue;
-			if (this.agrupamento !== "nenhum") {
+			if (agrupamentoEfetivo !== "nenhum") {
 				const cabecalhoGrupo = areaLista.createDiv({ cls: "mytasks-lista-cabecalho-grupo" });
 				cabecalhoGrupo.createEl("span", { text: grupo.rotulo });
 				if (grupo.cor) cabecalhoGrupo.style.setProperty("--mytasks-cor-grupo", grupo.cor);
