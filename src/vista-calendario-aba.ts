@@ -39,6 +39,7 @@ export class VistaCalendarioAba extends ItemView {
 			repositorio: this.repositorio,
 			configuracoes: this.configuracoes,
 			modoInicial: "semana-kanban",
+			filtroInicialId: this.configuracoes.filtroPadraoCalendarioId,
 		});
 		this.motor.renderizar();
 

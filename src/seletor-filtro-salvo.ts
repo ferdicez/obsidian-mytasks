@@ -7,24 +7,28 @@ export interface OpcoesSeletorFiltroSalvo {
 	aoEscolher: (filtroId: string | null, condicoes: CondicaoFiltro[]) => void;
 	// Restringe as opções do menu a estes IDs (ex: "filtro móvel" de uma visualização embutida). Sem isso, mostra todos os Filtros salvos.
 	restringirAIds?: string[];
+	// Elemento cuja borda esquerda define onde o menu abre (ex: o cabeçalho inteiro, pra descer sempre
+	// alinhado com o início da coluna, independente de qual botão foi clicado). Sem isso, usa o próprio botão.
+	elementoAlinhamento?: HTMLElement;
 }
 
 export class SeletorFiltroSalvo {
-	private botaoTexto: HTMLElement;
+	private botao: HTMLButtonElement;
 	private filtroAtualId: string | null;
 
 	constructor(private container: HTMLElement, private opcoes: OpcoesSeletorFiltroSalvo) {
 		this.filtroAtualId = opcoes.filtroAtualId;
 
-		const botao = container.createEl("button", { cls: "mytasks-seletor-discreto" });
-		const icone = botao.createSpan({ cls: "mytasks-seletor-discreto-icone" });
+		this.botao = container.createEl("button", {
+			cls: "mytasks-seletor-discreto mytasks-seletor-so-icone",
+			attr: { "aria-label": "Filtro" },
+		});
+		const icone = this.botao.createSpan({ cls: "mytasks-seletor-discreto-icone" });
 		setIcon(icone, "filter");
-		this.botaoTexto = botao.createSpan({ cls: "mytasks-seletor-discreto-texto" });
-		this.atualizarTexto();
-		const chevron = botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
+		const chevron = this.botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
 		setIcon(chevron, "chevrons-up-down");
 
-		botao.addEventListener("click", (evento) => this.abrirMenu(evento));
+		this.botao.addEventListener("click", () => this.abrirMenu());
 	}
 
 	private opcoesDisponiveis() {
@@ -33,24 +37,17 @@ export class SeletorFiltroSalvo {
 		return filtrosSalvos.filter((f) => this.opcoes.restringirAIds!.includes(f.id));
 	}
 
-	private atualizarTexto(): void {
-		if (!this.filtroAtualId) {
-			this.botaoTexto.setText("Sem filtro");
-			return;
-		}
-		const filtro = this.opcoesDisponiveis().find((f) => f.id === this.filtroAtualId);
-		this.botaoTexto.setText(filtro?.nome ?? "Sem filtro");
-	}
-
-	private abrirMenu(evento: MouseEvent): void {
+	private abrirMenu(): void {
 		const menu = new Menu();
+		menu.setUseNativeMenu(false);
+		menu.addItem((item) => item.setTitle("selecionar filtro").setDisabled(true));
+		menu.addSeparator();
 		menu.addItem((item) =>
 			item
 				.setTitle("nenhum")
 				.setChecked(this.filtroAtualId === null)
 				.onClick(() => {
 					this.filtroAtualId = null;
-					this.atualizarTexto();
 					this.opcoes.aoEscolher(null, []);
 				})
 		);
@@ -61,11 +58,12 @@ export class SeletorFiltroSalvo {
 					.setChecked(this.filtroAtualId === filtro.id)
 					.onClick(() => {
 						this.filtroAtualId = filtro.id;
-						this.atualizarTexto();
 						this.opcoes.aoEscolher(filtro.id, filtro.condicoes.map((c) => ({ ...c, valores: [...c.valores] })));
 					})
 			);
 		}
-		menu.showAtMouseEvent(evento);
+		const retanguloBotao = this.botao.getBoundingClientRect();
+		const x = (this.opcoes.elementoAlinhamento ?? this.botao).getBoundingClientRect().left;
+		menu.showAtPosition({ x, y: retanguloBotao.bottom + 4 });
 	}
 }

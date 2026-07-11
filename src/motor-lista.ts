@@ -1,5 +1,14 @@
 import { App, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, emPeriodoDeAviso, estaNoInbox } from "./tipos";
+import {
+	CondicaoFiltro,
+	ConfiguracoesGestorTarefas,
+	ID_STATUS,
+	Tarefa,
+	TipoAgrupamento,
+	emPeriodoDeAviso,
+	estaNoInbox,
+	obterFiltroSalvo,
+} from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa } from "./render-tarefa";
@@ -14,6 +23,9 @@ export interface OpcoesMotorLista {
 	configuracoes: ConfiguracoesGestorTarefas;
 	filtro?: (tarefa: Tarefa) => boolean;
 	agrupamentoInicial?: TipoAgrupamento;
+	// Filtro salvo pré-selecionado ao abrir (ex: filtro padrão configurado em Configurações, ou o filtro
+	// móvel padrão de uma Visualização salva — nesse caso deve ser um dos IDs presentes em filtrosExtrasIds).
+	filtroInicialId?: string | null;
 	arrastavel?: boolean;
 	permitirTrocaAgrupamento?: boolean;
 	permitirEdicaoFiltro?: boolean;
@@ -33,6 +45,12 @@ export class MotorLista {
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorLista) {
 		this.agrupamento = opcoes.agrupamentoInicial ?? "nenhum";
+
+		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
+		if (filtroInicial) {
+			this.filtroSalvoId = filtroInicial.id;
+			this.condicoesFiltro = filtroInicial.condicoes.map((c) => ({ ...c, valores: [...c.valores] }));
+		}
 	}
 
 	renderizar(): void {
@@ -156,25 +174,13 @@ export class MotorLista {
 			return;
 		}
 
-		if (this.opcoes.permitirCriarTarefa !== false) {
-			const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
-			const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
-			setIcon(iconeNova, "square-plus");
-			botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
-			botaoNova.addEventListener("click", () => {
-				new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
-					await this.opcoes.repositorio.criarTarefa(titulo, dados);
-					this.renderizar();
-				}).open();
-			});
-		}
-
 		if (this.opcoes.permitirTrocaAgrupamento !== false) {
 			new SeletorAgrupamento(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
 				agrupamentoAtual: this.agrupamento,
 				permitirNenhum: true,
 				permitirDia: true,
+				elementoAlinhamento: cabecalho,
 				aoEscolher: (agrupamento) => {
 					this.agrupamento = agrupamento;
 					this.renderizarCorpo();
@@ -188,11 +194,27 @@ export class MotorLista {
 				configuracoes: this.opcoes.configuracoes,
 				filtroAtualId: this.filtroSalvoId,
 				restringirAIds: this.opcoes.filtrosExtrasIds,
+				elementoAlinhamento: cabecalho,
 				aoEscolher: (filtroId, condicoes) => {
 					this.filtroSalvoId = filtroId;
 					this.condicoesFiltro = condicoes;
 					this.renderizarCorpo();
 				},
+			});
+		}
+
+		if (this.opcoes.permitirCriarTarefa !== false) {
+			const botaoNova = cabecalho.createEl("button", {
+				cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto mytasks-seletor-so-icone",
+				attr: { "aria-label": "Nova tarefa" },
+			});
+			const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
+			setIcon(iconeNova, "square-plus");
+			botaoNova.addEventListener("click", () => {
+				new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
+					await this.opcoes.repositorio.criarTarefa(titulo, dados);
+					this.renderizar();
+				}).open();
 			});
 		}
 	}

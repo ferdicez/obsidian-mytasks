@@ -12,6 +12,7 @@ export interface BlocoListaCompilado {
 	agrupamento: TipoAgrupamento;
 	filtro: (tarefa: Tarefa) => boolean;
 	filtrosExtrasIds: string[];
+	filtroExtraPadraoId: string | null;
 }
 
 function agrupamentoValido(valor: string | undefined, configuracoes: ConfiguracoesGestorTarefas): TipoAgrupamento {
@@ -49,5 +50,6 @@ export function compilarBlocoLista(
 		agrupamento,
 		filtro: compilarFiltro(condicoes, app, sourcePath, configuracoes),
 		filtrosExtrasIds: config.filtro ? [] : viewSalva?.filtrosExtrasIds ?? [],
+		filtroExtraPadraoId: config.filtro ? null : viewSalva?.filtroExtraPadraoId ?? null,
 	};
 }

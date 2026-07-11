@@ -7,6 +7,9 @@ export interface OpcoesSeletorAgrupamento {
 	permitirNenhum: boolean;
 	permitirDia: boolean;
 	aoEscolher: (agrupamento: TipoAgrupamento) => void;
+	// Elemento cuja borda esquerda define onde o menu abre (ex: o cabeçalho inteiro, pra descer sempre
+	// alinhado com o início da coluna, independente de qual botão foi clicado). Sem isso, usa o próprio botão.
+	elementoAlinhamento?: HTMLElement;
 }
 
 export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: ConfiguracoesGestorTarefas): string {
@@ -16,44 +19,49 @@ export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: C
 	return configuracoes.propriedades.find((p) => p.id === agrupamento)?.rotulo ?? agrupamento;
 }
 
+export function opcoesDeAgrupamento(
+	configuracoes: ConfiguracoesGestorTarefas,
+	permitirNenhum: boolean,
+	permitirDia: boolean
+): TipoAgrupamento[] {
+	const lista: TipoAgrupamento[] = [];
+	if (permitirNenhum) lista.push("nenhum");
+	if (permitirDia) lista.push("dia");
+	lista.push(ID_STATUS);
+	for (const def of configuracoes.propriedades) {
+		if (def.tipo === "selecao") lista.push(def.id);
+	}
+	return lista;
+}
+
 export class SeletorAgrupamento {
-	private botaoTexto: HTMLElement;
+	private botao: HTMLButtonElement;
 	private agrupamentoAtual: TipoAgrupamento;
 
 	constructor(private container: HTMLElement, private opcoes: OpcoesSeletorAgrupamento) {
 		this.agrupamentoAtual = opcoes.agrupamentoAtual;
 
-		const botao = container.createEl("button", { cls: "mytasks-seletor-discreto" });
-		const icone = botao.createSpan({ cls: "mytasks-seletor-discreto-icone" });
+		this.botao = container.createEl("button", {
+			cls: "mytasks-seletor-discreto mytasks-seletor-so-icone",
+			attr: { "aria-label": "Agrupamento" },
+		});
+		const icone = this.botao.createSpan({ cls: "mytasks-seletor-discreto-icone" });
 		setIcon(icone, "layout-grid");
-		this.botaoTexto = botao.createSpan({ cls: "mytasks-seletor-discreto-texto" });
-		this.atualizarTexto();
-		const chevron = botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
+		const chevron = this.botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
 		setIcon(chevron, "chevrons-up-down");
 
-		botao.addEventListener("click", (evento) => this.abrirMenu(evento));
-	}
-
-	private atualizarTexto(): void {
-		this.botaoTexto.setText(
-			this.agrupamentoAtual === "nenhum" ? "Sem agrupamento" : rotuloAgrupamento(this.agrupamentoAtual, this.opcoes.configuracoes)
-		);
+		this.botao.addEventListener("click", () => this.abrirMenu());
 	}
 
 	private opcoesValidas(): TipoAgrupamento[] {
-		const { configuracoes, permitirNenhum, permitirDia } = this.opcoes;
-		const lista: TipoAgrupamento[] = [];
-		if (permitirNenhum) lista.push("nenhum");
-		if (permitirDia) lista.push("dia");
-		lista.push(ID_STATUS);
-		for (const def of configuracoes.propriedades) {
-			if (def.tipo === "selecao") lista.push(def.id);
-		}
-		return lista;
+		return opcoesDeAgrupamento(this.opcoes.configuracoes, this.opcoes.permitirNenhum, this.opcoes.permitirDia);
 	}
 
-	private abrirMenu(evento: MouseEvent): void {
+	private abrirMenu(): void {
 		const menu = new Menu();
+		menu.setUseNativeMenu(false);
+		menu.addItem((item) => item.setTitle("selecionar agrupamento").setDisabled(true));
+		menu.addSeparator();
 		for (const agrupamento of this.opcoesValidas()) {
 			menu.addItem((item) =>
 				item
@@ -61,11 +69,12 @@ export class SeletorAgrupamento {
 					.setChecked(agrupamento === this.agrupamentoAtual)
 					.onClick(() => {
 						this.agrupamentoAtual = agrupamento;
-						this.atualizarTexto();
 						this.opcoes.aoEscolher(agrupamento);
 					})
 			);
 		}
-		menu.showAtMouseEvent(evento);
+		const retanguloBotao = this.botao.getBoundingClientRect();
+		const x = (this.opcoes.elementoAlinhamento ?? this.botao).getBoundingClientRect().left;
+		menu.showAtPosition({ x, y: retanguloBotao.bottom + 4 });
 	}
 }

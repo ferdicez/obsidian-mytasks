@@ -1,8 +1,10 @@
 import { App, Menu, setIcon } from "obsidian";
-import { ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, Tarefa } from "./tipos";
+import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, Tarefa, obterFiltroSalvo } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA, OpcoesCartaoTarefa } from "./render-tarefa";
+import { compilarFiltro } from "./motor-filtro";
+import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
 
 export type { ModoCalendario };
 
@@ -26,6 +28,13 @@ export interface OpcoesMotorCalendario {
 	modoInicial?: ModoCalendario;
 	filtro?: (tarefa: Tarefa) => boolean;
 	permitirTrocaModo?: boolean;
+	permitirEdicaoFiltro?: boolean;
+	// Filtro salvo pré-selecionado ao abrir (ex: filtro padrão configurado em Configurações, ou o filtro
+	// móvel padrão de uma Visualização salva — nesse caso deve ser um dos IDs presentes em filtrosExtrasIds).
+	filtroInicialId?: string | null;
+	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
+	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento do Calendário geral).
+	filtrosExtrasIds?: string[];
 }
 
 function formatarData(data: Date): string {
@@ -45,9 +54,17 @@ export class MotorCalendario {
 	private modo: ModoCalendario;
 	private dataReferencia: Date = new Date();
 	private diaExpandido: string | null = null;
+	private condicoesFiltro: CondicaoFiltro[] = [];
+	private filtroSalvoId: string | null = null;
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorCalendario) {
 		this.modo = opcoes.modoInicial ?? "mes";
+
+		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
+		if (filtroInicial) {
+			this.filtroSalvoId = filtroInicial.id;
+			this.condicoesFiltro = filtroInicial.condicoes.map((c) => ({ ...c, valores: [...c.valores] }));
+		}
 	}
 
 	renderizar(): void {
@@ -71,7 +88,9 @@ export class MotorCalendario {
 
 	private tarefasFiltradas(): Tarefa[] {
 		const todas = this.opcoes.repositorio.listarTarefas().filter((t) => t.data !== null);
-		return this.opcoes.filtro ? todas.filter(this.opcoes.filtro) : todas;
+		const filtroFixo = this.opcoes.filtro ? todas.filter(this.opcoes.filtro) : todas;
+		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+		return filtroFixo.filter(filtroInterativo);
 	}
 
 	private opcoesCartao(extras: OpcoesCartaoTarefa = {}): OpcoesCartaoTarefa {
@@ -120,8 +139,24 @@ export class MotorCalendario {
 
 		ladoEsquerdo.createEl("span", { text: this.rotuloPeriodo(), cls: "mytasks-calendario-rotulo-periodo" });
 
+		const ladoDireito = cabecalho.createDiv({ cls: "mytasks-calendario-cabecalho-lado" });
+
+		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
+		if (this.opcoes.permitirEdicaoFiltro !== false && !filtroMovelVazio) {
+			new SeletorFiltroSalvo(ladoDireito, {
+				configuracoes: this.opcoes.configuracoes,
+				filtroAtualId: this.filtroSalvoId,
+				restringirAIds: this.opcoes.filtrosExtrasIds,
+				aoEscolher: (filtroId, condicoes) => {
+					this.filtroSalvoId = filtroId;
+					this.condicoesFiltro = condicoes;
+					this.renderizar();
+				},
+			});
+		}
+
 		if (this.opcoes.permitirTrocaModo !== false) {
-			const botaoSeletorModo = cabecalho.createEl("button", { cls: "mytasks-calendario-seletor-modo" });
+			const botaoSeletorModo = ladoDireito.createEl("button", { cls: "mytasks-calendario-seletor-modo" });
 			const textoSeletorModo = botaoSeletorModo.createSpan({
 				cls: "mytasks-seletor-discreto-texto",
 				text: ROTULOS_MODO[this.modo],
@@ -129,8 +164,11 @@ export class MotorCalendario {
 			const chevron = botaoSeletorModo.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
 			setIcon(chevron, "chevrons-up-down");
 
-			botaoSeletorModo.addEventListener("click", (evento) => {
+			botaoSeletorModo.addEventListener("click", () => {
 				const menu = new Menu();
+				menu.setUseNativeMenu(false);
+				menu.addItem((item) => item.setTitle("selecionar visualização").setDisabled(true));
+				menu.addSeparator();
 				for (const chave of Object.keys(ROTULOS_MODO) as ModoCalendario[]) {
 					menu.addItem((item) =>
 						item
@@ -143,7 +181,8 @@ export class MotorCalendario {
 							})
 					);
 				}
-				menu.showAtMouseEvent(evento);
+				const retangulo = botaoSeletorModo.getBoundingClientRect();
+				menu.showAtPosition({ x: retangulo.left, y: retangulo.bottom + 4 });
 			});
 		}
 	}

@@ -11,6 +11,7 @@ import {
 	ROTULOS_ESPESSURA,
 	ROTULOS_ESTILO_DESTAQUE,
 	ROTULOS_MODO,
+	TipoAgrupamento,
 	VisualizacaoSalva,
 	normalizarChave,
 } from "./tipos";
@@ -18,7 +19,7 @@ import { ModalEditarPropriedade } from "./modal-editar-propriedade";
 import { ListaOpcoesGerenciada } from "./lista-opcoes-gerenciada";
 import { ModalEditarVisualizacaoSalva } from "./modal-editar-visualizacao-salva";
 import { ModalEditarFiltroSalvo } from "./modal-editar-filtro-salvo";
-import { rotuloAgrupamento } from "./seletor-agrupamento";
+import { opcoesDeAgrupamento, rotuloAgrupamento } from "./seletor-agrupamento";
 import { contarReferenciasView } from "./localizador-referencias";
 import { ID_DATA_ENTRADA } from "./render-tarefa";
 
@@ -233,6 +234,13 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private renderizarPaginaCalendario(containerEl: HTMLElement): void {
+		this.renderizarFiltroPadrao(
+			containerEl,
+			"Filtro padrão",
+			() => this.plugin.configuracoes.filtroPadraoCalendarioId,
+			(id) => (this.plugin.configuracoes.filtroPadraoCalendarioId = id)
+		);
+
 		new Setting(containerEl)
 			.setName("Mostrar detalhes nas tarefas do calendário")
 			.setDesc("Exibe status e propriedades abaixo do título de cada tarefa nas visões de calendário.")
@@ -259,6 +267,20 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private renderizarPaginaKanban(containerEl: HTMLElement): void {
+		this.renderizarAgrupamentoPadrao(
+			containerEl,
+			"Agrupamento padrão",
+			false,
+			false,
+			() => this.plugin.configuracoes.agrupamentoPadraoKanban,
+			(agrupamento) => (this.plugin.configuracoes.agrupamentoPadraoKanban = agrupamento)
+		);
+		this.renderizarFiltroPadrao(
+			containerEl,
+			"Filtro padrão",
+			() => this.plugin.configuracoes.filtroPadraoKanbanId,
+			(id) => (this.plugin.configuracoes.filtroPadraoKanbanId = id)
+		);
 		this.renderizarPropriedadesVisiveis(
 			containerEl,
 			"Propriedades visíveis no kanban",
@@ -269,6 +291,20 @@ export class AbaConfiguracoes extends PluginSettingTab {
 
 	private renderizarPaginaTarefas(containerEl: HTMLElement): void {
 		containerEl.createEl("h3", { text: "Lista de tarefas" });
+		this.renderizarAgrupamentoPadrao(
+			containerEl,
+			"Agrupamento padrão",
+			true,
+			true,
+			() => this.plugin.configuracoes.agrupamentoPadraoLista,
+			(agrupamento) => (this.plugin.configuracoes.agrupamentoPadraoLista = agrupamento)
+		);
+		this.renderizarFiltroPadrao(
+			containerEl,
+			"Filtro padrão",
+			() => this.plugin.configuracoes.filtroPadraoListaId,
+			(id) => (this.plugin.configuracoes.filtroPadraoListaId = id)
+		);
 		this.renderizarPropriedadesVisiveis(
 			containerEl,
 			"Propriedades visíveis na lista",
@@ -283,6 +319,51 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			() => this.plugin.configuracoes.listaInboxPropriedadesVisiveis,
 			(lista) => (this.plugin.configuracoes.listaInboxPropriedadesVisiveis = lista)
 		);
+	}
+
+	private renderizarAgrupamentoPadrao(
+		container: HTMLElement,
+		titulo: string,
+		permitirNenhum: boolean,
+		permitirDia: boolean,
+		obterAtual: () => TipoAgrupamento,
+		definir: (agrupamento: TipoAgrupamento) => void
+	) {
+		const opcoes = opcoesDeAgrupamento(this.plugin.configuracoes, permitirNenhum, permitirDia);
+		new Setting(container)
+			.setName(titulo)
+			.setDesc("Agrupamento com que esta tela abre sempre que você a acessa.")
+			.addDropdown((dropdown) => {
+				for (const opcao of opcoes) {
+					dropdown.addOption(opcao, rotuloAgrupamento(opcao, this.plugin.configuracoes));
+				}
+				dropdown.setValue(obterAtual()).onChange(async (valor) => {
+					definir(valor);
+					await this.plugin.salvarConfiguracoes();
+				});
+			});
+	}
+
+	private renderizarFiltroPadrao(
+		container: HTMLElement,
+		titulo: string,
+		obterAtual: () => string | null,
+		definir: (id: string | null) => void
+	) {
+		const { filtrosSalvos } = this.plugin.configuracoes;
+		new Setting(container)
+			.setName(titulo)
+			.setDesc("Filtro salvo aplicado sempre que esta tela abre. Escolha entre os Filtros salvos (aba Filtros).")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", "nenhum");
+				for (const filtro of filtrosSalvos) {
+					dropdown.addOption(filtro.id, filtro.nome);
+				}
+				dropdown.setValue(obterAtual() ?? "").onChange(async (valor) => {
+					definir(valor || null);
+					await this.plugin.salvarConfiguracoes();
+				});
+			});
 	}
 
 	private renderizarPaginaFiltros(containerEl: HTMLElement): void {

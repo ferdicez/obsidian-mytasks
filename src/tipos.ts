@@ -96,6 +96,9 @@ export interface VisualizacaoSalva {
 	// IDs de Filtros salvos (Configurações → Filtros) disponíveis como filtro extra opcional quando
 	// esta visualização está embutida numa nota — soma-se (E lógico) ao filtro fixo (`condicoes`) acima.
 	filtrosExtrasIds?: string[];
+	// Qual dos filtrosExtrasIds já vem selecionado ao abrir/renderizar o embed. Deve ser um dos IDs
+	// presentes em filtrosExtrasIds — se não estiver mais na lista (ex: removido depois), é ignorado.
+	filtroExtraPadraoId?: string | null;
 }
 
 // Filtro pré-configurado, escolhível na barrinha de Filtro da Lista/Kanban gerais (sidebar e aba) — diferente de VisualizacaoSalva, que é para embutir em notas.
@@ -139,6 +142,13 @@ export interface ConfiguracoesGestorTarefas {
 	listaInboxPropriedadesVisiveis: string[] | null;
 	visualizacoesSalvas: VisualizacaoSalva[];
 	filtrosSalvos: FiltroSalvo[];
+	// Aplicados sempre que a respectiva view abre pela primeira vez (sidebar ou aba) — não afeta
+	// Visualizações salvas nem o "filtro móvel" de embeds, que já têm seus próprios mecanismos.
+	agrupamentoPadraoKanban: TipoAgrupamento;
+	agrupamentoPadraoLista: TipoAgrupamento;
+	filtroPadraoCalendarioId: string | null;
+	filtroPadraoKanbanId: string | null;
+	filtroPadraoListaId: string | null;
 }
 
 export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
@@ -165,6 +175,11 @@ export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
 	listaInboxPropriedadesVisiveis: [],
 	visualizacoesSalvas: [],
 	filtrosSalvos: [],
+	agrupamentoPadraoKanban: ID_STATUS,
+	agrupamentoPadraoLista: "nenhum",
+	filtroPadraoCalendarioId: null,
+	filtroPadraoKanbanId: null,
+	filtroPadraoListaId: null,
 };
 
 export type PropriedadeValor = string | string[] | null;

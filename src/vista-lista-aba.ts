@@ -38,6 +38,8 @@ export class VistaListaAba extends ItemView {
 			repositorio: this.repositorio,
 			configuracoes: this.configuracoes,
 			mostrarToggleInbox: true,
+			agrupamentoInicial: this.configuracoes.agrupamentoPadraoLista,
+			filtroInicialId: this.configuracoes.filtroPadraoListaId,
 		});
 		this.motor.renderizar();
 

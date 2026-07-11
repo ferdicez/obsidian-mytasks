@@ -1,5 +1,5 @@
 import { App, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento } from "./tipos";
+import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, obterFiltroSalvo } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA } from "./render-tarefa";
@@ -14,6 +14,9 @@ export interface OpcoesMotorKanban {
 	configuracoes: ConfiguracoesGestorTarefas;
 	agrupamentoInicial?: TipoAgrupamento;
 	filtro?: (tarefa: Tarefa) => boolean;
+	// Filtro salvo pré-selecionado ao abrir (ex: filtro padrão configurado em Configurações, ou o filtro
+	// móvel padrão de uma Visualização salva — nesse caso deve ser um dos IDs presentes em filtrosExtrasIds).
+	filtroInicialId?: string | null;
 	permitirTrocaAgrupamento?: boolean;
 	permitirEdicaoFiltro?: boolean;
 	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
@@ -29,6 +32,12 @@ export class MotorKanban {
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorKanban) {
 		this.agrupamento = opcoes.agrupamentoInicial ?? ID_STATUS;
+
+		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
+		if (filtroInicial) {
+			this.filtroSalvoId = filtroInicial.id;
+			this.condicoesFiltro = filtroInicial.condicoes.map((c) => ({ ...c, valores: [...c.valores] }));
+		}
 	}
 
 	renderizar(): void {
@@ -130,23 +139,13 @@ export class MotorKanban {
 		const cabecalho = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
 		cabecalho.createEl("h3", { text: "Kanban" });
 
-		const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
-		const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
-		setIcon(iconeNova, "square-plus");
-		botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
-		botaoNova.addEventListener("click", () => {
-			new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
-				await this.opcoes.repositorio.criarTarefa(titulo, dados);
-				this.renderizar();
-			}).open();
-		});
-
 		if (this.opcoes.permitirTrocaAgrupamento !== false) {
 			new SeletorAgrupamento(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
 				agrupamentoAtual: this.agrupamento,
 				permitirNenhum: false,
 				permitirDia: false,
+				elementoAlinhamento: cabecalho,
 				aoEscolher: (agrupamento) => {
 					this.agrupamento = agrupamento;
 					this.renderizarGrade();
@@ -160,6 +159,7 @@ export class MotorKanban {
 				configuracoes: this.opcoes.configuracoes,
 				filtroAtualId: this.filtroSalvoId,
 				restringirAIds: this.opcoes.filtrosExtrasIds,
+				elementoAlinhamento: cabecalho,
 				aoEscolher: (filtroId, condicoes) => {
 					this.filtroSalvoId = filtroId;
 					this.condicoesFiltro = condicoes;
@@ -167,5 +167,16 @@ export class MotorKanban {
 				},
 			});
 		}
+
+		const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
+		const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
+		setIcon(iconeNova, "square-plus");
+		botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
+		botaoNova.addEventListener("click", () => {
+			new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
+				await this.opcoes.repositorio.criarTarefa(titulo, dados);
+				this.renderizar();
+			}).open();
+		});
 	}
 }

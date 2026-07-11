@@ -21,6 +21,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 	private agrupamento: TipoAgrupamento;
 	private modoCalendario: ModoCalendario;
 	private filtrosExtrasIds: string[];
+	private filtroExtraPadraoId: string | null;
 	private divCodigoEmbed?: HTMLElement;
 
 	constructor(
@@ -37,6 +38,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 		this.agrupamento = visualizacaoExistente?.agrupamento ?? (this.tipoView === "kanban" ? ID_STATUS : "nenhum");
 		this.modoCalendario = visualizacaoExistente?.modoCalendario ?? "mes";
 		this.filtrosExtrasIds = [...(visualizacaoExistente?.filtrosExtrasIds ?? [])];
+		this.filtroExtraPadraoId = visualizacaoExistente?.filtroExtraPadraoId ?? null;
 	}
 
 	onOpen(): void {
@@ -84,7 +86,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 				text: "Escolha quais Filtros salvos ficam disponíveis para ligar/desligar na hora, quando esta visualização estiver embutida numa nota — eles se somam ao filtro fixo acima, sem substituí-lo.",
 				cls: "setting-item-description",
 			});
-			this.renderizarFiltrosExtras(contentEl);
+			this.renderizarFiltrosExtras(contentEl.createDiv());
 
 			contentEl.createEl("h3", { text: "Código para embutir na nota" });
 			this.divCodigoEmbed = contentEl.createEl("pre");
@@ -113,6 +115,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 						agrupamento: this.tipoView === "calendario" ? undefined : this.agrupamento,
 						modoCalendario: this.tipoView === "calendario" ? this.modoCalendario : undefined,
 						filtrosExtrasIds: this.tipoView === "calendario" ? undefined : this.filtrosExtrasIds,
+						filtroExtraPadraoId: this.tipoView === "calendario" ? undefined : this.filtroExtraPadraoId,
 					});
 					this.close();
 				})
@@ -152,6 +155,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 	}
 
 	private renderizarFiltrosExtras(container: HTMLElement): void {
+		container.empty();
 		const filtrosSalvos = this.configuracoes.filtrosSalvos;
 		if (filtrosSalvos.length === 0) {
 			container.createEl("p", {
@@ -168,10 +172,27 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 						if (!this.filtrosExtrasIds.includes(filtro.id)) this.filtrosExtrasIds.push(filtro.id);
 					} else {
 						this.filtrosExtrasIds = this.filtrosExtrasIds.filter((id) => id !== filtro.id);
+						if (this.filtroExtraPadraoId === filtro.id) this.filtroExtraPadraoId = null;
 					}
+					this.renderizarFiltrosExtras(container);
 				})
 			);
 		}
+
+		if (this.filtrosExtrasIds.length === 0) return;
+
+		new Setting(container)
+			.setName("Filtro móvel padrão")
+			.setDesc("Qual desses já vem selecionado quando a visualização é aberta.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", "nenhum");
+				for (const filtro of filtrosSalvos.filter((f) => this.filtrosExtrasIds.includes(f.id))) {
+					dropdown.addOption(filtro.id, filtro.nome);
+				}
+				dropdown.setValue(this.filtroExtraPadraoId ?? "").onChange((valor) => {
+					this.filtroExtraPadraoId = valor || null;
+				});
+			});
 	}
 
 	private gerarCodigoEmbed(): string {

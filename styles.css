@@ -327,6 +327,21 @@
 	color: var(--text-muted);
 }
 
+.mytasks-seletor-so-icone {
+	gap: 2px;
+}
+
+.menu-item.is-disabled,
+.menu-item[aria-disabled="true"] {
+	font-size: 0.78em;
+	font-weight: 600;
+	text-transform: lowercase;
+	letter-spacing: 0.02em;
+	color: var(--text-faint) !important;
+	cursor: default;
+	opacity: 1 !important;
+}
+
 .mytasks-cor-linha .setting-item-name {
 	font-size: 0.9em;
 }

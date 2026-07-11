@@ -26,6 +26,7 @@ class EmbedKanban extends MarkdownRenderChild {
 			agrupamentoInicial: compilado.agrupamento,
 			filtro: compilado.filtro,
 			filtrosExtrasIds: compilado.filtrosExtrasIds,
+			filtroInicialId: compilado.filtroExtraPadraoId,
 			permitirTrocaAgrupamento: false,
 		});
 	}

@@ -37,6 +37,8 @@ export class VistaKanbanAba extends ItemView {
 			app: this.app,
 			repositorio: this.repositorio,
 			configuracoes: this.configuracoes,
+			agrupamentoInicial: this.configuracoes.agrupamentoPadraoKanban,
+			filtroInicialId: this.configuracoes.filtroPadraoKanbanId,
 		});
 		this.motor.renderizar();
 
