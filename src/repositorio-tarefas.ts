@@ -115,6 +115,30 @@ export class RepositorioTarefas {
 		};
 	}
 
+	// Espera o metadataCache confirmar que já indexou o frontmatter deste arquivo antes de devolver o
+	// controle pro chamador — sem isso, quem cria uma tarefa e re-renderiza a tela logo em seguida (ex:
+	// captura rápida do Inbox) pode ler um cache ainda desatualizado (frontmatter undefined) e a tarefa
+	// nova fica invisível até algum evento posterior forçar um novo render. Some plugins concorrentes no
+	// vault (Dataview, Templater etc.) podem atrasar/perder esse evento, então isso é aguardado com um
+	// timeout de segurança em vez de depender só do listener de "changed" registrado pelas views.
+	private async aguardarFrontmatterIndexado(arquivo: TFile): Promise<void> {
+		if (this.app.metadataCache.getFileCache(arquivo)?.frontmatter) return;
+		await new Promise<void>((resolve) => {
+			let resolvido = false;
+			const finalizar = () => {
+				if (resolvido) return;
+				resolvido = true;
+				this.app.metadataCache.offref(referencia);
+				clearTimeout(timeoutId);
+				resolve();
+			};
+			const referencia = this.app.metadataCache.on("changed", (arquivoMudado) => {
+				if (arquivoMudado.path === arquivo.path) finalizar();
+			});
+			const timeoutId = setTimeout(finalizar, 2000);
+		});
+	}
+
 	async criarTarefa(titulo: string, dados: DadosTarefaEscrita): Promise<TFile> {
 		const pasta = await this.garantirPasta(this.obterConfiguracoes().pastaTarefas);
 		const nomeArquivo = sanitizarNomeArquivo(titulo);
@@ -131,6 +155,7 @@ export class RepositorioTarefas {
 			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
 			fm.data_entrada = formatarData(new Date());
 		});
+		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;
 	}
 
