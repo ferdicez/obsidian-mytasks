@@ -66,14 +66,24 @@ export class MotorLista {
 
 	private tarefasFiltradas(): Tarefa[] {
 		const todas = this.opcoes.repositorio.listarTarefas();
-		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
-		const base = todas.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true)).filter(filtroInterativo);
+		const base = todas.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true));
 
-		if (!this.opcoes.mostrarToggleInbox) return base;
+		if (!this.opcoes.mostrarToggleInbox) {
+			const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+			return base.filter(filtroInterativo);
+		}
 
-		return base.filter((t) =>
+		const porModo = base.filter((t) =>
 			this.modo === "inbox" ? estaNoInbox(t, this.opcoes.configuracoes) : !estaNoInbox(t, this.opcoes.configuracoes)
 		);
+
+		// O Inbox não tem UI de filtro (é uma caixa de entrada simples) — o filtro interativo/padrão só
+		// se aplica ao modo Tarefas, senão qualquer Filtro padrão configurado vazaria pro Inbox por baixo
+		// dos panos e poderia esconder tarefas recém-criadas sem nenhum aviso na tela.
+		if (this.modo === "inbox") return porModo;
+
+		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+		return porModo.filter(filtroInterativo);
 	}
 
 	private propriedadesVisiveisAtuais(): string[] | null {
