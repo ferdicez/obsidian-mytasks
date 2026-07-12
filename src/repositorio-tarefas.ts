@@ -108,15 +108,30 @@ export class RepositorioTarefas {
 			valorGrupo: typeof valorGrupoBruto === "string" ? valorGrupoBruto : null,
 			statusAnterior: typeof fm.status_anterior === "string" ? fm.status_anterior : null,
 			data: typeof valorData === "string" ? valorData : null,
-			dataEntrada: typeof fm.data_entrada === "string" ? fm.data_entrada : formatarData(new Date(arquivo.stat.ctime)),
+			dataEntrada:
+				typeof fm.entrada === "string"
+					? fm.entrada
+					: typeof fm.data_entrada === "string"
+						? fm.data_entrada
+						: formatarData(new Date(arquivo.stat.ctime)),
 			horario: typeof fm.horario === "string" && REGEX_HORARIO.test(fm.horario as string) ? (fm.horario as string) : null,
 			recorrencia: (fm.recorrencia ?? "nenhuma") as Recorrencia,
 			manterHistorico: (fm.manter_historico ?? fm.recorrencia_manter_historico ?? true) as boolean,
 			recorrenciaDataFim: (fm.recorrencia_data_fim as string) ?? null,
-			diasAntecedenciaAviso: typeof fm.dias_antecedencia_aviso === "number" ? fm.dias_antecedencia_aviso : null,
+			diasAntecedenciaAviso:
+				typeof fm.antecedencia === "number"
+					? fm.antecedencia
+					: typeof fm.dias_antecedencia_aviso === "number"
+						? fm.dias_antecedencia_aviso
+						: null,
 			propriedades: lerFrontmatter(this.app, arquivo, fm, propriedades),
 			proximaOcorrenciaCaminho: typeof fm.proxima_ocorrencia === "string" ? fm.proxima_ocorrencia : null,
-			nasceuDeOcorrenciaCaminho: typeof fm.veio_de_ocorrencia === "string" ? fm.veio_de_ocorrencia : null,
+			nasceuDeOcorrenciaCaminho:
+				typeof fm.ocorrencia_anterior === "string"
+					? fm.ocorrencia_anterior
+					: typeof fm.veio_de_ocorrencia === "string"
+						? fm.veio_de_ocorrencia
+						: null,
 		};
 	}
 
@@ -158,13 +173,14 @@ export class RepositorioTarefas {
 		const config = this.obterConfiguracoes();
 		const { propriedades, dataTarefa } = config;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			// Carimba o discriminador de grupo (quando configurado) ANTES do resto, para
-			// a tarefa nascer já no grupo certo e a propriedade de grupo ser a primeira do frontmatter.
+			// Ordem pedida pela Fernanda: 1) grupo, 2) entrada, 3) prazo, 4) propriedades customizadas
+			// (as duas últimas são gravadas dentro de escreverFrontmatter). A ordem de inserção das
+			// chaves no objeto `fm` é o que decide a ordem final no frontmatter da nota.
 			if (config.__propriedadeGrupo) {
 				fm[config.__propriedadeGrupo] = config.__valorGrupo ?? "";
 			}
+			fm.entrada = formatarData(new Date());
 			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
-			fm.data_entrada = formatarData(new Date());
 		});
 		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;
@@ -392,7 +408,7 @@ export class RepositorioTarefas {
 			propriedades: tarefa.propriedades,
 		});
 		await this.app.fileManager.processFrontMatter(arquivoNovo, (fm) => {
-			fm.veio_de_ocorrencia = caminhoOrigem;
+			fm.ocorrencia_anterior = caminhoOrigem;
 		});
 		return arquivoNovo;
 	}

@@ -34,22 +34,12 @@ export function escreverFrontmatter(
 	definicoes: PropriedadeDefinida[],
 	chaveData = "data"
 ): void {
-	fm.status = dados.status;
+	// Ordem de escrita pedida pela Fernanda (a ordem de inserção das chaves é o que decide a ordem
+	// no frontmatter): 1) grupo (carimbado por fora, antes desta função) → 2) entrada (idem) →
+	// 3) prazo → 4) propriedades customizadas. Os demais campos padrão do plugin (status, horário,
+	// recorrência...) vêm depois, sem posição específica pedida por ela.
 	if (dados.data) fm[chaveData] = dados.data;
 	else delete fm[chaveData];
-
-	if (dados.horario && REGEX_HORARIO.test(dados.horario)) fm.horario = dados.horario;
-	else delete fm.horario;
-
-	fm.recorrencia = dados.recorrencia;
-	fm.manter_historico = dados.manterHistorico;
-	delete fm.recorrencia_manter_historico;
-
-	if (dados.recorrenciaDataFim) fm.recorrencia_data_fim = dados.recorrenciaDataFim;
-	else delete fm.recorrencia_data_fim;
-
-	if (dados.diasAntecedenciaAviso) fm.dias_antecedencia_aviso = dados.diasAntecedenciaAviso;
-	else delete fm.dias_antecedencia_aviso;
 
 	for (const def of definicoes) {
 		const valor = dados.propriedades[def.id];
@@ -68,6 +58,22 @@ export function escreverFrontmatter(
 			fm[def.id] = valor;
 		}
 	}
+
+	fm.status = dados.status;
+
+	if (dados.horario && REGEX_HORARIO.test(dados.horario)) fm.horario = dados.horario;
+	else delete fm.horario;
+
+	fm.recorrencia = dados.recorrencia;
+	fm.manter_historico = dados.manterHistorico;
+	delete fm.recorrencia_manter_historico;
+
+	if (dados.recorrenciaDataFim) fm.recorrencia_data_fim = dados.recorrenciaDataFim;
+	else delete fm.recorrencia_data_fim;
+
+	if (dados.diasAntecedenciaAviso) fm.antecedencia = dados.diasAntecedenciaAviso;
+	else delete fm.antecedencia;
+	delete fm.dias_antecedencia_aviso;
 }
 
 export function lerFrontmatter(

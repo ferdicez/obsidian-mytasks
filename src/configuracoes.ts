@@ -656,15 +656,51 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		container.empty();
 		const propriedades = [...this.grupo.propriedades].sort((a, b) => a.ordem - b.ordem);
 
-		for (const propriedade of propriedades) {
-			this.renderizarItemPropriedade(container, propriedade);
-		}
+		propriedades.forEach((propriedade, indice) => {
+			this.renderizarItemPropriedade(container, propriedade, indice, propriedades.length);
+		});
 	}
 
-	private renderizarItemPropriedade(container: HTMLElement, propriedade: PropriedadeDefinida) {
+	// Move a propriedade uma posição pra cima/baixo na lista. Essa ordem é a mesma usada
+	// pra decidir a ordem das propriedades no frontmatter da nota e nas visões (Kanban/Lista/Calendário).
+	private async moverPropriedade(propriedade: PropriedadeDefinida, direcao: -1 | 1): Promise<void> {
+		const ordenadas = [...this.grupo.propriedades].sort((a, b) => a.ordem - b.ordem);
+		const indice = ordenadas.findIndex((p) => p.id === propriedade.id);
+		const novoIndice = indice + direcao;
+		if (indice < 0 || novoIndice < 0 || novoIndice >= ordenadas.length) return;
+
+		[ordenadas[indice], ordenadas[novoIndice]] = [ordenadas[novoIndice], ordenadas[indice]];
+		ordenadas.forEach((p, i) => (p.ordem = i));
+		this.grupo.propriedades = ordenadas;
+		await this.plugin.salvarConfiguracoes();
+		this.display();
+	}
+
+	private renderizarItemPropriedade(
+		container: HTMLElement,
+		propriedade: PropriedadeDefinida,
+		indice: number,
+		total: number
+	) {
 		const setting = new Setting(container)
 			.setName(propriedade.rotulo)
 			.setDesc(this.descricaoTipo(propriedade));
+
+		setting.addExtraButton((btn) =>
+			btn
+				.setIcon("arrow-up")
+				.setTooltip("Mover para cima")
+				.setDisabled(indice === 0)
+				.onClick(() => this.moverPropriedade(propriedade, -1))
+		);
+
+		setting.addExtraButton((btn) =>
+			btn
+				.setIcon("arrow-down")
+				.setTooltip("Mover para baixo")
+				.setDisabled(indice === total - 1)
+				.onClick(() => this.moverPropriedade(propriedade, 1))
+		);
 
 		setting.addExtraButton((btn) =>
 			btn
