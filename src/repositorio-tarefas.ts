@@ -158,12 +158,13 @@ export class RepositorioTarefas {
 		const config = this.obterConfiguracoes();
 		const { propriedades, dataTarefa } = config;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
-			fm.data_entrada = formatarData(new Date());
-			// Carimba o discriminador de grupo (quando configurado) para a tarefa nascer já no grupo certo.
+			// Carimba o discriminador de grupo (quando configurado) ANTES do resto, para
+			// a tarefa nascer já no grupo certo e a propriedade de grupo ser a primeira do frontmatter.
 			if (config.__propriedadeGrupo) {
 				fm[config.__propriedadeGrupo] = config.__valorGrupo ?? "";
 			}
+			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
+			fm.data_entrada = formatarData(new Date());
 		});
 		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;

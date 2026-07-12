@@ -1,7 +1,7 @@
 {
 	"id": "my-tasks",
 	"name": "My Tasks",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"minAppVersion": "1.4.10",
 	"description": "Gestão de tarefas em português: cada tarefa é uma nota, com kanban, calendário, lista e recorrência.",
 	"author": "ferdicez",
