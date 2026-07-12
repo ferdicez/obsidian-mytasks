@@ -29,7 +29,9 @@ export function opcoesDeAgrupamento(
 	if (permitirDia) lista.push("dia");
 	lista.push(ID_STATUS);
 	for (const def of configuracoes.propriedades) {
-		if (def.tipo === "selecao") lista.push(def.id);
+		// "lista" (várias tags por tarefa) e "data" ficam de fora — cada tarefa poderia entrar em
+		// vários grupos ao mesmo tempo, ou já tem um jeito próprio de agrupar (agrupamento "por dia").
+		if (def.tipo === "selecao" || def.tipo === "texto" || def.tipo === "link_arquivo") lista.push(def.id);
 	}
 	return lista;
 }

@@ -129,6 +129,9 @@ export interface PropriedadeDefinida {
 	tipo: TipoPropriedade;
 	opcoes?: OpcaoSelecao[];
 	ordem: number;
+	// Só para tipo "link_arquivo": lista fixa de caminhos disponíveis para escolher (dropdown rápido,
+	// sem precisar buscar). Vazia/ausente = busca livre em todo o vault (comportamento de sempre).
+	arquivosFixos?: string[];
 }
 
 export interface ConfigStatus {

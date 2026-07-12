@@ -1,4 +1,6 @@
+import { App } from "obsidian";
 import { ConfigEfetivaGrupo, ID_STATUS, Tarefa, TipoAgrupamento } from "./tipos";
+import { rotuloValorPropriedade } from "./render-tarefa";
 
 export interface ClusterAgrupamento {
 	chave: string;
@@ -22,7 +24,8 @@ function rotuloDia(dataStr: string): string {
 export function agruparTarefas(
 	tarefas: Tarefa[],
 	agrupamento: TipoAgrupamento,
-	configuracoes: ConfigEfetivaGrupo
+	configuracoes: ConfigEfetivaGrupo,
+	app: App
 ): ClusterAgrupamento[] {
 	if (agrupamento === "nenhum") {
 		return [{ chave: "nenhum", rotulo: "", tarefas }];
@@ -39,19 +42,45 @@ export function agruparTarefas(
 		return dias.map((dia) => ({ chave: dia, rotulo: rotuloDia(dia), tarefas: porDia.get(dia)! }));
 	}
 
-	const opcoes =
-		agrupamento === ID_STATUS
-			? configuracoes.status.opcoes
-			: configuracoes.propriedades.find((p) => p.id === agrupamento)?.opcoes ?? [];
+	const propriedadeDef = agrupamento === ID_STATUS ? null : configuracoes.propriedades.find((p) => p.id === agrupamento);
+	const opcoesFixas = agrupamento === ID_STATUS ? configuracoes.status.opcoes : propriedadeDef?.tipo === "selecao" ? propriedadeDef.opcoes ?? [] : null;
 
-	const grupos: ClusterAgrupamento[] = opcoes.map((opcao) => ({
+	const semValor: Tarefa[] = [];
+
+	// Propriedades sem opções fixas (texto, link para arquivo): não há uma lista pré-definida de
+	// valores possíveis, então os grupos/colunas nascem dos valores que já aparecem nas tarefas —
+	// um grupo por valor distinto encontrado, ordenado pelo rótulo exibido.
+	if (!opcoesFixas) {
+		const porValor = new Map<string, Tarefa[]>();
+		for (const tarefa of tarefas) {
+			const valor = tarefa.propriedades[agrupamento];
+			const valorTexto = typeof valor === "string" && valor.trim() ? valor : null;
+			if (!valorTexto) {
+				semValor.push(tarefa);
+				continue;
+			}
+			if (!porValor.has(valorTexto)) porValor.set(valorTexto, []);
+			porValor.get(valorTexto)!.push(tarefa);
+		}
+		const rotular = (valor: string) =>
+			propriedadeDef?.tipo === "link_arquivo" ? rotuloValorPropriedade(app, valor) : valor;
+		const grupos: ClusterAgrupamento[] = [...porValor.keys()]
+			.sort((a, b) => rotular(a).localeCompare(rotular(b)))
+			.map((valor) => ({ chave: valor, rotulo: rotular(valor), tarefas: porValor.get(valor)! }));
+
+		if (semValor.length > 0) {
+			grupos.push({ chave: "__sem_valor__", rotulo: "Sem valor", tarefas: semValor });
+		}
+		return grupos;
+	}
+
+	const grupos: ClusterAgrupamento[] = opcoesFixas.map((opcao) => ({
 		chave: opcao.valor,
 		rotulo: opcao.valor,
 		cor: opcao.cor,
 		tarefas: [],
 	}));
 
-	const semValor: Tarefa[] = [];
 	for (const tarefa of tarefas) {
 		const valor = agrupamento === ID_STATUS ? tarefa.status : tarefa.propriedades[agrupamento];
 		const valorTexto = typeof valor === "string" ? valor : null;

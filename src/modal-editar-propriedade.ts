@@ -1,6 +1,7 @@
 import { App, Modal, Setting } from "obsidian";
 import { OpcaoSelecao, PropriedadeDefinida, TipoPropriedade } from "./tipos";
 import { ListaOpcoesGerenciada } from "./lista-opcoes-gerenciada";
+import { ListaArquivosGerenciada } from "./lista-arquivos-gerenciada";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 
 const ROTULOS_TIPO: Record<TipoPropriedade, string> = {
@@ -25,6 +26,7 @@ export class ModalEditarPropriedade extends Modal {
 	private rotulo: string;
 	private tipo: TipoPropriedade;
 	private opcoes: OpcaoSelecao[];
+	private arquivosFixos: string[];
 
 	constructor(
 		app: App,
@@ -37,6 +39,7 @@ export class ModalEditarPropriedade extends Modal {
 		this.rotulo = propriedadeExistente?.rotulo ?? "";
 		this.tipo = propriedadeExistente?.tipo ?? "texto";
 		this.opcoes = (propriedadeExistente?.opcoes ?? []).map((o) => ({ ...o }));
+		this.arquivosFixos = [...(propriedadeExistente?.arquivosFixos ?? [])];
 	}
 
 	onOpen() {
@@ -54,6 +57,7 @@ export class ModalEditarPropriedade extends Modal {
 			dropdown.setValue(this.tipo).onChange((valor) => {
 				this.tipo = valor as TipoPropriedade;
 				divOpcoes.toggle(this.tipo === "selecao");
+				divArquivosFixos.toggle(this.tipo === "link_arquivo");
 			});
 		});
 
@@ -67,6 +71,18 @@ export class ModalEditarPropriedade extends Modal {
 			aoMudar: (opcoes) => (this.opcoes = opcoes),
 		});
 		divOpcoes.toggle(this.tipo === "selecao");
+
+		const divArquivosFixos = contentEl.createDiv();
+		new Setting(divArquivosFixos)
+			.setName("Arquivos fixos (opcional)")
+			.setDesc(
+				"Se você adicionar arquivos aqui, só eles aparecerão como opção (num dropdown rápido) ao criar ou editar uma tarefa. Deixe vazio para continuar buscando qualquer arquivo do vault."
+			);
+		const containerArquivos = divArquivosFixos.createDiv();
+		new ListaArquivosGerenciada(this.app, containerArquivos, this.arquivosFixos, {
+			aoMudar: (caminhos) => (this.arquivosFixos = caminhos),
+		});
+		divArquivosFixos.toggle(this.tipo === "link_arquivo");
 
 		new Setting(contentEl).addButton((btn) =>
 			btn
@@ -83,6 +99,7 @@ export class ModalEditarPropriedade extends Modal {
 						tipo: this.tipo,
 						ordem: this.propriedadeExistente?.ordem ?? this.proximaOrdem,
 						opcoes: this.tipo === "selecao" ? this.opcoes.filter((o) => o.valor.trim()) : undefined,
+						arquivosFixos: this.tipo === "link_arquivo" && this.arquivosFixos.length > 0 ? this.arquivosFixos : undefined,
 					});
 					this.close();
 				})

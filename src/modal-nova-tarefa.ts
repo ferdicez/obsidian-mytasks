@@ -291,18 +291,37 @@ export class ModalNovaTarefa extends Modal {
 				});
 				break;
 			case "link_arquivo":
-				setting.addSearch((search) => {
-					if (typeof valorAtual === "string") {
-						const arquivoAtual = this.app.vault.getAbstractFileByPath(valorAtual);
-						if (arquivoAtual) search.setValue(arquivoAtual.name.replace(/\.md$/, ""));
-					}
-					new SugestorArquivos(this.app, search.inputEl, (arquivo: TFile) => {
-						this.valores[def.id] = arquivo.path;
+				if (def.arquivosFixos && def.arquivosFixos.length > 0) {
+					const arquivosFixos = def.arquivosFixos;
+					setting.addDropdown((dropdown) => {
+						dropdown.addOption("", "—");
+						for (const caminho of arquivosFixos) {
+							const arquivo = this.app.vault.getAbstractFileByPath(caminho);
+							dropdown.addOption(caminho, arquivo?.name.replace(/\.md$/, "") ?? caminho);
+						}
+						// Tarefa já tinha um arquivo que não está (mais) na lista fixa — mantém como opção
+						// extra pra não trocar o valor salvo sem o usuário mexer no campo.
+						if (typeof valorAtual === "string" && !arquivosFixos.includes(valorAtual)) {
+							const arquivoAtual = this.app.vault.getAbstractFileByPath(valorAtual);
+							dropdown.addOption(valorAtual, arquivoAtual?.name.replace(/\.md$/, "") ?? valorAtual);
+						}
+						if (typeof valorAtual === "string") dropdown.setValue(valorAtual);
+						dropdown.onChange((valor) => (this.valores[def.id] = valor || null));
 					});
-					search.inputEl.addEventListener("input", () => {
-						if (!search.inputEl.value) this.valores[def.id] = null;
+				} else {
+					setting.addSearch((search) => {
+						if (typeof valorAtual === "string") {
+							const arquivoAtual = this.app.vault.getAbstractFileByPath(valorAtual);
+							if (arquivoAtual) search.setValue(arquivoAtual.name.replace(/\.md$/, ""));
+						}
+						new SugestorArquivos(this.app, search.inputEl, (arquivo: TFile) => {
+							this.valores[def.id] = arquivo.path;
+						});
+						search.inputEl.addEventListener("input", () => {
+							if (!search.inputEl.value) this.valores[def.id] = null;
+						});
 					});
-				});
+				}
 				break;
 			case "lista": {
 				const valoresIniciais = Array.isArray(valorAtual) ? valorAtual : [];

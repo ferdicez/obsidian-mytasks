@@ -64,7 +64,7 @@ export class MotorKanban {
 	}
 
 	private colunas() {
-		return agruparTarefas(this.tarefasFiltradas(), this.agrupamento, this.opcoes.configuracoes);
+		return agruparTarefas(this.tarefasFiltradas(), this.agrupamento, this.opcoes.configuracoes, this.opcoes.app);
 	}
 
 	private propriedadesMeta() {

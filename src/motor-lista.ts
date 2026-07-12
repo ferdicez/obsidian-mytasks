@@ -148,7 +148,7 @@ export class MotorLista {
 		}
 
 		const agrupamentoEfetivo = this.agrupamentoEfetivo();
-		const grupos = agruparTarefas(tarefas, agrupamentoEfetivo, this.opcoes.configuracoes);
+		const grupos = agruparTarefas(tarefas, agrupamentoEfetivo, this.opcoes.configuracoes, this.opcoes.app);
 		const areaLista = this.areaCorpo.createDiv({ cls: "mytasks-lista-area" });
 
 		for (const grupo of grupos) {
