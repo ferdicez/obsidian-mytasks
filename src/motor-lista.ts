@@ -1,7 +1,7 @@
 import { App, setIcon } from "obsidian";
 import {
 	CondicaoFiltro,
-	ConfiguracoesGestorTarefas,
+	ConfigEfetivaGrupo,
 	ID_STATUS,
 	Tarefa,
 	TipoAgrupamento,
@@ -20,7 +20,7 @@ import { SeletorAgrupamento } from "./seletor-agrupamento";
 export interface OpcoesMotorLista {
 	app: App;
 	repositorio: RepositorioTarefas;
-	configuracoes: ConfiguracoesGestorTarefas;
+	configuracoes: ConfigEfetivaGrupo;
 	filtro?: (tarefa: Tarefa) => boolean;
 	agrupamentoInicial?: TipoAgrupamento;
 	// Filtro salvo pré-selecionado ao abrir (ex: filtro padrão configurado em Configurações, ou o filtro
@@ -31,6 +31,9 @@ export interface OpcoesMotorLista {
 	permitirEdicaoFiltro?: boolean;
 	permitirCriarTarefa?: boolean;
 	mostrarToggleInbox?: boolean;
+	// Rótulo do botão "Tarefas" do toggle Inbox/Tarefas — usado para mostrar o NOME do grupo na sidebar.
+	// Ausente = "Tarefas" (comportamento antigo / embeds).
+	rotuloModoTarefas?: string;
 	// Empurra os controles do cabeçalho (Filtro + Nova tarefa) para a direita — usado nos embeds em nota,
 	// que não têm toggle Inbox nem título à esquerda, então sem isso os controles ficariam colados à esquerda.
 	alinharControlesADireita?: boolean;
@@ -77,7 +80,9 @@ export class MotorLista {
 		}
 
 		const porModo = base.filter((t) =>
-			this.modo === "inbox" ? estaNoInbox(t, this.opcoes.configuracoes) : !estaNoInbox(t, this.opcoes.configuracoes)
+			this.modo === "inbox"
+				? estaNoInbox(t, this.opcoes.configuracoes.status)
+				: !estaNoInbox(t, this.opcoes.configuracoes.status)
 		);
 
 		// O Inbox não tem UI de filtro (é uma caixa de entrada simples) — o filtro interativo/padrão só
@@ -173,7 +178,7 @@ export class MotorLista {
 			const toggle = cabecalho.createDiv({ cls: "mytasks-toggle-inbox" });
 			const botaoInbox = toggle.createEl("button", { attr: { "aria-label": "Inbox" } });
 			setIcon(botaoInbox, "inbox");
-			const botaoTarefas = toggle.createEl("button", { text: "Tarefas" });
+			const botaoTarefas = toggle.createEl("button", { text: this.opcoes.rotuloModoTarefas ?? "Tarefas" });
 			botaoInbox.toggleClass("mytasks-toggle-ativo", this.modo === "inbox");
 			botaoTarefas.toggleClass("mytasks-toggle-ativo", this.modo === "tarefas");
 			botaoInbox.addEventListener("click", () => {

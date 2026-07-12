@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, PeriodoFiltro, Tarefa, periodosDaCondicao } from "./tipos";
+import { CondicaoFiltro, ConfigEfetivaGrupo, ID_STATUS, PeriodoFiltro, Tarefa, periodosDaCondicao } from "./tipos";
 import { ID_DATA } from "./render-tarefa";
 
 function formatarDataLocal(data: Date): string {
@@ -71,7 +71,7 @@ export function compilarFiltro(
 	condicoes: CondicaoFiltro[],
 	app: App,
 	sourcePath: string | null,
-	_configuracoes: ConfiguracoesGestorTarefas
+	_configuracoes: ConfigEfetivaGrupo
 ): (tarefa: Tarefa) => boolean {
 	if (condicoes.length === 0) return () => true;
 

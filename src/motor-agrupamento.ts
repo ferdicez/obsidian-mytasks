@@ -1,6 +1,6 @@
-import { ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento } from "./tipos";
+import { ConfigEfetivaGrupo, ID_STATUS, Tarefa, TipoAgrupamento } from "./tipos";
 
-export interface GrupoTarefas {
+export interface ClusterAgrupamento {
 	chave: string;
 	rotulo: string;
 	cor?: string;
@@ -22,8 +22,8 @@ function rotuloDia(dataStr: string): string {
 export function agruparTarefas(
 	tarefas: Tarefa[],
 	agrupamento: TipoAgrupamento,
-	configuracoes: ConfiguracoesGestorTarefas
-): GrupoTarefas[] {
+	configuracoes: ConfigEfetivaGrupo
+): ClusterAgrupamento[] {
 	if (agrupamento === "nenhum") {
 		return [{ chave: "nenhum", rotulo: "", tarefas }];
 	}
@@ -44,7 +44,7 @@ export function agruparTarefas(
 			? configuracoes.status.opcoes
 			: configuracoes.propriedades.find((p) => p.id === agrupamento)?.opcoes ?? [];
 
-	const grupos: GrupoTarefas[] = opcoes.map((opcao) => ({
+	const grupos: ClusterAgrupamento[] = opcoes.map((opcao) => ({
 		chave: opcao.valor,
 		rotulo: opcao.valor,
 		cor: opcao.cor,

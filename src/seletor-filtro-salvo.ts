@@ -1,8 +1,8 @@
 import { Menu, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas } from "./tipos";
+import { CondicaoFiltro, ConfigEfetivaGrupo } from "./tipos";
 
 export interface OpcoesSeletorFiltroSalvo {
-	configuracoes: ConfiguracoesGestorTarefas;
+	configuracoes: ConfigEfetivaGrupo;
 	filtroAtualId: string | null;
 	aoEscolher: (filtroId: string | null, condicoes: CondicaoFiltro[]) => void;
 	// Restringe as opções do menu a estes IDs (ex: "filtro móvel" de uma visualização embutida). Sem isso, mostra todos os Filtros salvos.

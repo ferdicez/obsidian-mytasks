@@ -16,12 +16,14 @@ export interface OpcaoSelecao {
 	cor?: string;
 }
 
-export type EstiloDestaque = "checkbox" | "linha" | "borda";
+// "linha" (linha inteira colorida) foi removida (esse espaço é do aviso de prazo). O estilo "borda"
+// mantém a chave por compatibilidade, mas agora é renderizado como uma BOLINHA colorida no fim do título
+// (a borda lateral foi trocada por ela). Sobram: checkbox colorido e bolinha colorida.
+export type EstiloDestaque = "checkbox" | "borda";
 
 export const ROTULOS_ESTILO_DESTAQUE: Record<EstiloDestaque, string> = {
 	checkbox: "Checkbox colorido",
-	linha: "Linha inteira colorida",
-	borda: "Borda lateral colorida",
+	borda: "Bolinha colorida (no fim do título)",
 };
 
 export type EspessuraCheckbox = "fina" | "media" | "grossa";
@@ -139,7 +141,10 @@ export interface ConfigData {
 	chave: string;
 }
 
-export interface ConfiguracoesGestorTarefas {
+// Config "efetiva" de um grupo: o shape plano que TODOS os consumidores de leitura (motores, render,
+// agrupamento, filtro, seletores, modal) enxergam. Cada grupo carrega uma cópia independente destes campos;
+// o código de leitura nunca vê "vários grupos" — só a config efetiva do SEU grupo (ver configDoGrupo).
+export interface ConfigEfetivaGrupo {
 	pastaTarefas: string;
 	moverConcluidas: boolean;
 	pastaConcluidas: string;
@@ -162,9 +167,38 @@ export interface ConfiguracoesGestorTarefas {
 	filtroPadraoCalendarioId: string | null;
 	filtroPadraoKanbanId: string | null;
 	filtroPadraoListaId: string | null;
+	// Campos derivados só-leitura, preenchidos por configDoGrupo, para o repositório carimbar o discriminador
+	// ao criar tarefas e resolver o pertencimento — não são persistidos (vêm do grupo + do topo global).
+	readonly __propriedadeGrupo?: string | null;
+	readonly __valorGrupo?: string;
 }
 
-export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
+// Um grupo de tarefas: o bundle de config independente + identidade (id/valor/nome/ícone).
+export interface GrupoTarefas extends ConfigEfetivaGrupo {
+	id: string;
+	// Valor do discriminador global (ConfiguracoesGestorTarefas.propriedadeGrupo) que casa este grupo.
+	valorDiscriminador: string;
+	nome: string;
+	icone: string; // ícone Lucide para o ribbon da sidebar e o seletor de grupo
+}
+
+export interface ConfiguracoesGestorTarefas {
+	// Propriedade global (chave de frontmatter) que discrimina a qual grupo cada tarefa pertence. Null = ainda
+	// não configurada -> modo single-group (todo mundo cai no primeiro grupo).
+	propriedadeGrupo: string | null;
+	grupos: GrupoTarefas[];
+	// Grupo lembrado por view única (Kanban/Calendário). Null cai no primeiro grupo.
+	grupoAtivoKanbanId: string | null;
+	grupoAtivoCalendarioId: string | null;
+}
+
+// Defaults planos de hoje, agora encapsulados no primeiro grupo. Uma instalação nova nasce com este único grupo
+// e propriedadeGrupo null -> comporta-se exatamente como o plugin single-group de antes.
+export const GRUPO_PADRAO: GrupoTarefas = {
+	id: "grupo_padrao",
+	valorDiscriminador: "",
+	nome: "Tarefas",
+	icone: "check-square",
 	pastaTarefas: "Tarefas",
 	moverConcluidas: false,
 	pastaConcluidas: "",
@@ -195,6 +229,33 @@ export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
 	filtroPadraoListaId: null,
 };
 
+export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
+	propriedadeGrupo: null,
+	grupos: [{ ...GRUPO_PADRAO }],
+	grupoAtivoKanbanId: null,
+	grupoAtivoCalendarioId: null,
+};
+
+export function grupoPorId(configuracoes: ConfiguracoesGestorTarefas, id: string | null): GrupoTarefas | undefined {
+	if (id === null) return undefined;
+	return configuracoes.grupos.find((g) => g.id === id);
+}
+
+// Nunca retorna undefined enquanto houver ao menos um grupo (sempre há, após a migração): cai no primeiro.
+export function grupoAtivoOuPrimeiro(configuracoes: ConfiguracoesGestorTarefas, id: string | null): GrupoTarefas {
+	return grupoPorId(configuracoes, id) ?? configuracoes.grupos[0];
+}
+
+// Produz a config efetiva de leitura de um grupo: é o próprio grupo (já satisfaz ConfigEfetivaGrupo) com os
+// campos derivados globais injetados (propriedade discriminadora + valor deste grupo) para o repositório carimbar.
+export function configDoGrupo(configuracoes: ConfiguracoesGestorTarefas, grupo: GrupoTarefas): ConfigEfetivaGrupo {
+	return {
+		...grupo,
+		__propriedadeGrupo: configuracoes.propriedadeGrupo,
+		__valorGrupo: grupo.valorDiscriminador,
+	};
+}
+
 export type PropriedadeValor = string | string[] | null;
 
 export interface Tarefa {
@@ -210,6 +271,9 @@ export interface Tarefa {
 	recorrenciaDataFim: string | null;
 	diasAntecedenciaAviso: number | null;
 	propriedades: Record<string, PropriedadeValor>;
+	// Valor cru do discriminador de grupo (lido direto do frontmatter, mesmo que a propriedade não esteja
+	// cadastrada). Null = tarefa sem grupo atribuído. Ver tarefaPertenceAoGrupo.
+	valorGrupo: string | null;
 	// Vínculo entre uma ocorrência concluída e a próxima que ela gerou — usado para desfazer a conclusão com segurança.
 	proximaOcorrenciaCaminho: string | null;
 	nasceuDeOcorrenciaCaminho: string | null;
@@ -253,8 +317,27 @@ export function opcaoStatusComData(status: ConfigStatus): string | undefined {
 }
 
 // Regra posicional (mesmo padrão de ultimaOpcaoStatus = "concluído"): Inbox é sempre a primeira opção de Status.
-export function estaNoInbox(tarefa: Tarefa, configuracoes: ConfiguracoesGestorTarefas): boolean {
-	return tarefa.status === primeiraOpcaoStatus(configuracoes.status);
+export function estaNoInbox(tarefa: Tarefa, status: ConfigStatus): boolean {
+	return tarefa.status === primeiraOpcaoStatus(status);
+}
+
+// A tarefa pertence a este grupo? Com discriminador global desativado (null), todo mundo pertence ao grupo
+// (modo single-group). Com discriminador ativo: casa por valor; uma tarefa cujo valor não bate NENHUM grupo
+// (incluindo valor ausente) cai no PRIMEIRO grupo (grupoDefault) — nunca some, mesma lição do bug "Inbox sumindo".
+export function tarefaPertenceAoGrupo(
+	tarefa: Tarefa,
+	grupo: GrupoTarefas,
+	configuracoes: ConfiguracoesGestorTarefas
+): boolean {
+	const grupoDefault = configuracoes.grupos[0];
+	if (configuracoes.propriedadeGrupo === null) return grupo.id === grupoDefault.id;
+
+	if (tarefa.valorGrupo !== null && grupo.valorDiscriminador === tarefa.valorGrupo) return true;
+
+	// Valor ausente ou que não corresponde a nenhum grupo cadastrado -> pertence ao grupo default.
+	const casaAlgumGrupo =
+		tarefa.valorGrupo !== null && configuracoes.grupos.some((g) => g.valorDiscriminador === tarefa.valorGrupo);
+	return !casaAlgumGrupo && grupo.id === grupoDefault.id;
 }
 
 function dentroDeUmaPasta(caminhoArquivo: string, pasta: string): boolean {
@@ -264,14 +347,14 @@ function dentroDeUmaPasta(caminhoArquivo: string, pasta: string): boolean {
 // Um arquivo conta como tarefa se estiver na pasta de Tarefas, OU na pasta de Concluídas (quando
 // "mover concluídas" está ativo) — tarefas concluídas continuam aparecendo na Lista/Kanban mesmo
 // movidas de pasta; só um filtro ativo deve escondê-las, não a localização física do arquivo.
-export function arquivoEhTarefaRelevante(configuracoes: ConfiguracoesGestorTarefas, caminhoArquivo: string): boolean {
+export function arquivoEhTarefaRelevante(configuracoes: ConfigEfetivaGrupo, caminhoArquivo: string): boolean {
 	const { pastaTarefas, moverConcluidas, pastaConcluidas } = configuracoes;
 	if (dentroDeUmaPasta(caminhoArquivo, pastaTarefas)) return true;
 	if (moverConcluidas && pastaConcluidas && dentroDeUmaPasta(caminhoArquivo, pastaConcluidas)) return true;
 	return false;
 }
 
-function corDaPropriedade(tarefa: Tarefa, configuracoes: ConfiguracoesGestorTarefas, propriedadeId: string): string | null {
+function corDaPropriedade(tarefa: Tarefa, configuracoes: ConfigEfetivaGrupo, propriedadeId: string): string | null {
 	if (propriedadeId === ID_STATUS) {
 		return configuracoes.status.opcoes.find((o) => o.valor === tarefa.status)?.cor ?? null;
 	}
@@ -287,7 +370,7 @@ function corDaPropriedade(tarefa: Tarefa, configuracoes: ConfiguracoesGestorTare
 /** Cor de destaque para um estilo específico (checkbox/linha/borda), ou null se nenhuma propriedade controla esse estilo. */
 export function corDeDestaquePorEstilo(
 	tarefa: Tarefa,
-	configuracoes: ConfiguracoesGestorTarefas,
+	configuracoes: ConfigEfetivaGrupo,
 	estilo: EstiloDestaque
 ): string | null {
 	const destaque = configuracoes.destaques[estilo];
@@ -296,7 +379,7 @@ export function corDeDestaquePorEstilo(
 }
 
 export function obterVisualizacao(
-	configuracoes: ConfiguracoesGestorTarefas,
+	configuracoes: ConfigEfetivaGrupo,
 	idOuNome: string
 ): VisualizacaoSalva | undefined {
 	const porId = configuracoes.visualizacoesSalvas.find((v) => v.id === idOuNome);
@@ -305,7 +388,7 @@ export function obterVisualizacao(
 	return configuracoes.visualizacoesSalvas.find((v) => v.nome.toLowerCase() === alvo);
 }
 
-export function obterFiltroSalvo(configuracoes: ConfiguracoesGestorTarefas, id: string): FiltroSalvo | undefined {
+export function obterFiltroSalvo(configuracoes: ConfigEfetivaGrupo, id: string): FiltroSalvo | undefined {
 	return configuracoes.filtrosSalvos.find((f) => f.id === id);
 }
 

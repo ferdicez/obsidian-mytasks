@@ -1,5 +1,5 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TAbstractFile, TFile } from "obsidian";
-import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
+import { ConfigEfetivaGrupo, arquivoEhTarefaRelevante } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { MotorCalendario } from "./motor-calendario";
 import { compilarBlocoCalendario } from "./filtro-calendario";
@@ -15,7 +15,7 @@ class EmbedCalendario extends MarkdownRenderChild {
 		private ctx: MarkdownPostProcessorContext,
 		private app: App,
 		private repositorio: RepositorioTarefas,
-		private obterConfiguracoes: () => ConfiguracoesGestorTarefas
+		private obterConfiguracoes: () => ConfigEfetivaGrupo
 	) {
 		super(containerEl);
 		const compilado = compilarBlocoCalendario(source, app, ctx.sourcePath, obterConfiguracoes());
@@ -55,7 +55,7 @@ export function registrarProcessadorCalendario(
 	) => void,
 	app: App,
 	repositorio: RepositorioTarefas,
-	obterConfiguracoes: () => ConfiguracoesGestorTarefas
+	obterConfiguracoes: () => ConfigEfetivaGrupo
 ): void {
 	registerMarkdownCodeBlockProcessor(LINGUAGEM_BLOCO_CALENDARIO, (source, el, ctx) => {
 		const child = new EmbedCalendario(el, source, ctx, app, repositorio, obterConfiguracoes);

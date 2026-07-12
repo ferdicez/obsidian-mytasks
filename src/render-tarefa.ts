@@ -1,7 +1,7 @@
 import { App, setIcon } from "obsidian";
 import {
 	ID_STATUS,
-	ConfiguracoesGestorTarefas,
+	ConfigEfetivaGrupo,
 	PIXELS_ESPESSURA,
 	PropriedadeDefinida,
 	Tarefa,
@@ -59,7 +59,7 @@ export function desenharCartaoTarefa(
 	container: HTMLElement,
 	app: App,
 	repositorio: RepositorioTarefas,
-	configuracoes: ConfiguracoesGestorTarefas,
+	configuracoes: ConfigEfetivaGrupo,
 	tarefa: Tarefa,
 	opcoes: OpcoesCartaoTarefa = {}
 ): HTMLElement {
@@ -95,17 +95,10 @@ export function desenharCartaoTarefa(
 		item.style.borderLeft = `3px solid ${configuracoes.corAviso}`;
 	}
 
-	const corLinha = corDeDestaquePorEstilo(tarefa, configuracoes, "linha");
-	const corBorda = corDeDestaquePorEstilo(tarefa, configuracoes, "borda");
+	// "borda" agora é uma bolinha colorida no fim do título (desenhada mais abaixo, junto ao título) —
+	// não colore mais a lateral, pra não colidir com o aviso de prazo.
+	const corBolinha = corDeDestaquePorEstilo(tarefa, configuracoes, "borda");
 	const corCheckbox = corDeDestaquePorEstilo(tarefa, configuracoes, "checkbox");
-
-	if (corLinha && !emAviso) {
-		item.style.backgroundColor = corComOpacidade(corLinha, 0.18);
-	}
-	if (corBorda && !emAviso) {
-		item.addClass("mytasks-item-borda-reta");
-		item.style.borderLeft = `3px solid ${corBorda}`;
-	}
 
 	if (mostrarCheckbox) {
 		const checkbox = item.createEl("input", { type: "checkbox" });
@@ -128,7 +121,13 @@ export function desenharCartaoTarefa(
 	}
 
 	const info = item.createDiv({ cls: "mytasks-info" });
-	const titulo = info.createEl("span", { text: tarefa.titulo, cls: "mytasks-titulo" });
+	const linhaTitulo = info.createDiv({ cls: "mytasks-titulo-linha" });
+	const titulo = linhaTitulo.createEl("span", { text: tarefa.titulo, cls: "mytasks-titulo" });
+	// Destaque "bolinha": um pontinho colorido logo após o título, com a cor da propriedade escolhida.
+	if (corBolinha) {
+		const bolinha = linhaTitulo.createSpan({ cls: "mytasks-bolinha-destaque" });
+		bolinha.style.backgroundColor = corBolinha;
+	}
 	titulo.addEventListener("click", (evento) => {
 		evento.stopPropagation();
 		new ModalNovaTarefa(

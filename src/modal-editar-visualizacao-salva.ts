@@ -1,5 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, TipoAgrupamento, TipoView, VisualizacaoSalva } from "./tipos";
+import { CondicaoFiltro, ConfigEfetivaGrupo, ID_STATUS, ModoCalendario, ROTULOS_MODO, TipoAgrupamento, TipoView, VisualizacaoSalva } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ConstrutorFiltro } from "./construtor-filtro";
 
@@ -27,7 +27,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 	constructor(
 		app: App,
 		private visualizacaoExistente: VisualizacaoSalva | null,
-		private configuracoes: ConfiguracoesGestorTarefas,
+		private configuracoes: ConfigEfetivaGrupo,
 		private repositorio: RepositorioTarefas,
 		private aoSalvar: (visualizacao: VisualizacaoSalva) => void
 	) {
@@ -90,16 +90,17 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 			this.renderizarFiltrosExtras(contentEl.createDiv());
 
 			contentEl.createEl("h3", { text: "Código para embutir na nota" });
-			this.divCodigoEmbed = contentEl.createEl("pre");
+			const bloco = contentEl.createDiv({ cls: "mytasks-embed-bloco" });
+			const barra = bloco.createDiv({ cls: "mytasks-embed-barra" });
+			barra.createSpan({ text: "Cole este bloco numa nota", cls: "mytasks-embed-rotulo" });
+			const botaoCopiar = barra.createEl("button", { text: "Copiar", cls: "mytasks-embed-copiar" });
+			botaoCopiar.addEventListener("click", async () => {
+				await navigator.clipboard.writeText(this.gerarCodigoEmbed());
+				botaoCopiar.setText("Copiado!");
+				setTimeout(() => botaoCopiar.setText("Copiar"), 1500);
+			});
+			this.divCodigoEmbed = bloco.createEl("pre", { cls: "mytasks-embed-codigo" });
 			this.atualizarCodigoEmbed();
-
-			new Setting(contentEl).addButton((btn) =>
-				btn.setButtonText("Copiar código").onClick(async () => {
-					await navigator.clipboard.writeText(this.gerarCodigoEmbed());
-					btn.setButtonText("Copiado!");
-					setTimeout(() => btn.setButtonText("Copiar código"), 1500);
-				})
-			);
 		}
 
 		new Setting(contentEl).addButton((btn) =>

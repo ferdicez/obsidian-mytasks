@@ -1,5 +1,5 @@
 import { App, parseYaml } from "obsidian";
-import { ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, obterVisualizacao } from "./tipos";
+import { ConfigEfetivaGrupo, ID_STATUS, Tarefa, TipoAgrupamento, obterVisualizacao } from "./tipos";
 import { compilarFiltro, condicoesDeFiltroYaml } from "./motor-filtro";
 
 interface ConfigBlocoLista {
@@ -15,7 +15,7 @@ export interface BlocoListaCompilado {
 	filtroExtraPadraoId: string | null;
 }
 
-function agrupamentoValido(valor: string | undefined, configuracoes: ConfiguracoesGestorTarefas): TipoAgrupamento {
+function agrupamentoValido(valor: string | undefined, configuracoes: ConfigEfetivaGrupo): TipoAgrupamento {
 	if (!valor || valor === "nenhum") return "nenhum";
 	if (valor === "dia") return "dia";
 	if (valor === ID_STATUS) return ID_STATUS;
@@ -27,7 +27,7 @@ export function compilarBlocoLista(
 	source: string,
 	app: App,
 	sourcePath: string,
-	configuracoes: ConfiguracoesGestorTarefas
+	configuracoes: ConfigEfetivaGrupo
 ): BlocoListaCompilado {
 	let config: ConfigBlocoLista = {};
 	try {

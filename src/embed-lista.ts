@@ -1,5 +1,5 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TAbstractFile, TFile } from "obsidian";
-import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
+import { ConfigEfetivaGrupo, arquivoEhTarefaRelevante } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { MotorLista } from "./motor-lista";
 import { compilarBlocoLista } from "./filtro-lista";
@@ -15,7 +15,7 @@ class EmbedLista extends MarkdownRenderChild {
 		private ctx: MarkdownPostProcessorContext,
 		private app: App,
 		private repositorio: RepositorioTarefas,
-		private obterConfiguracoes: () => ConfiguracoesGestorTarefas
+		private obterConfiguracoes: () => ConfigEfetivaGrupo
 	) {
 		super(containerEl);
 		const compilado = compilarBlocoLista(source, app, ctx.sourcePath, obterConfiguracoes());
@@ -58,7 +58,7 @@ export function registrarProcessadorLista(
 	) => void,
 	app: App,
 	repositorio: RepositorioTarefas,
-	obterConfiguracoes: () => ConfiguracoesGestorTarefas
+	obterConfiguracoes: () => ConfigEfetivaGrupo
 ): void {
 	registerMarkdownCodeBlockProcessor(LINGUAGEM_BLOCO_LISTA, (source, el, ctx) => {
 		const child = new EmbedLista(el, source, ctx, app, repositorio, obterConfiguracoes);

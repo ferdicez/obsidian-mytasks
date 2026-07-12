@@ -1,10 +1,11 @@
 import { App, Menu, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, Tarefa, obterFiltroSalvo } from "./tipos";
+import { CondicaoFiltro, ConfigEfetivaGrupo, ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, Tarefa, obterFiltroSalvo } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA, OpcoesCartaoTarefa } from "./render-tarefa";
 import { compilarFiltro } from "./motor-filtro";
 import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
+import { SeletorGrupo } from "./seletor-grupo";
 
 export type { ModoCalendario };
 
@@ -24,7 +25,7 @@ const HORA_FINAL_GRADE = 22;
 export interface OpcoesMotorCalendario {
 	app: App;
 	repositorio: RepositorioTarefas;
-	configuracoes: ConfiguracoesGestorTarefas;
+	configuracoes: ConfigEfetivaGrupo;
 	modoInicial?: ModoCalendario;
 	filtro?: (tarefa: Tarefa) => boolean;
 	permitirTrocaModo?: boolean;
@@ -35,6 +36,11 @@ export interface OpcoesMotorCalendario {
 	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
 	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento do Calendário geral).
 	filtrosExtrasIds?: string[];
+	// Seletor de grupo (view única): config global para listar grupos + grupo ativo + callback de troca.
+	// Só desenha o ícone quando há mais de um grupo.
+	configuracoesGlobais?: ConfiguracoesGestorTarefas;
+	grupoAtivoId?: string;
+	aoTrocarGrupo?: (grupoId: string) => void;
 }
 
 function formatarData(data: Date): string {
@@ -74,6 +80,9 @@ export class MotorCalendario {
 		this.desenharCabecalho();
 
 		const areaGrade = this.containerEl.createDiv({ cls: "mytasks-calendario-grade-area" });
+		if (this.modo === "semana-horarios" || this.modo === "semana-kanban") {
+			areaGrade.addClass("mytasks-calendario-grade-area-semana");
+		}
 		if (this.modo === "semana-horarios") areaGrade.addClass("mytasks-calendario-grade-area-vertical");
 
 		if (this.modo === "mes") this.desenharMes(areaGrade);
@@ -136,6 +145,19 @@ export class MotorCalendario {
 
 		const botaoProximo = navegacao.createEl("button", { text: "›" });
 		botaoProximo.addEventListener("click", () => this.navegar(1));
+
+		// Ícone discreto de troca de grupo: logo APÓS a navegação "Hoje" e ANTES do rótulo do mês/semana.
+		if (this.opcoes.configuracoesGlobais && this.opcoes.grupoAtivoId && this.opcoes.aoTrocarGrupo) {
+			const cfgGlobal = this.opcoes.configuracoesGlobais;
+			if (cfgGlobal.grupos.length > 1) {
+				new SeletorGrupo(ladoEsquerdo, {
+					configuracoes: cfgGlobal,
+					grupoAtivoId: this.opcoes.grupoAtivoId,
+					icone: "calendar-days",
+					aoEscolher: (grupoId) => this.opcoes.aoTrocarGrupo!(grupoId),
+				});
+			}
+		}
 
 		ladoEsquerdo.createEl("span", { text: this.rotuloPeriodo(), cls: "mytasks-calendario-rotulo-periodo" });
 
@@ -362,6 +384,7 @@ export class MotorCalendario {
 
 			const coluna = grade.createDiv({ cls: "mytasks-calendario-coluna-dia" });
 			if (diaStr === hojeStr) coluna.addClass("mytasks-calendario-hoje");
+			if (i === numColunas - 1) coluna.addClass("mytasks-calendario-ultima-coluna");
 
 			const cabecalhoColuna = coluna.createDiv({ cls: "mytasks-calendario-cabecalho-coluna" });
 			cabecalhoColuna.createEl("span", {
@@ -407,8 +430,9 @@ export class MotorCalendario {
 		const cabecalhoDias = container.createDiv({ cls: "mytasks-calendario-cabecalho-semana-horarios" });
 		cabecalhoDias.style.setProperty("--mytasks-num-colunas", String(numColunas));
 		cabecalhoDias.createDiv();
-		for (const { data, diaStr } of dias) {
+		dias.forEach(({ data, diaStr }, indice) => {
 			const cabecalhoDia = cabecalhoDias.createDiv({ cls: "mytasks-calendario-cabecalho-coluna" });
+			if (indice === dias.length - 1) cabecalhoDia.addClass("mytasks-calendario-ultima-coluna");
 			if (diaStr === hojeStr) cabecalhoDia.addClass("mytasks-calendario-hoje");
 			cabecalhoDia.createEl("span", {
 				text: String(data.getDate()).padStart(2, "0"),
@@ -416,14 +440,15 @@ export class MotorCalendario {
 			});
 			cabecalhoDia.createEl("span", { text: "|", cls: "mytasks-calendario-separador-cabecalho" });
 			cabecalhoDia.createEl("span", { text: NOMES_DIA_SEMANA_COMPLETO[data.getDay()].toLowerCase() });
-		}
+		});
 
 		// Faixa "dia inteiro"
 		const faixaDiaInteiro = container.createDiv({ cls: "mytasks-calendario-faixa-dia-inteiro" });
 		faixaDiaInteiro.style.setProperty("--mytasks-num-colunas", String(numColunas));
 		faixaDiaInteiro.createDiv({ cls: "mytasks-calendario-rotulo-faixa", text: "Dia" });
-		for (const { diaStr } of dias) {
+		dias.forEach(({ diaStr }, indice) => {
 			const celula = faixaDiaInteiro.createDiv({ cls: "mytasks-calendario-celula-dia-inteiro" });
+			if (indice === dias.length - 1) celula.addClass("mytasks-calendario-ultima-coluna");
 			const tarefasSemHorario = tarefas.filter((t) => t.data === diaStr && !t.horario);
 			for (const tarefa of tarefasSemHorario) {
 				desenharCartaoTarefa(
@@ -437,7 +462,7 @@ export class MotorCalendario {
 			}
 			celula.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
 			this.registrarAlvoDeSoltura(celula, diaStr, null);
-		}
+		});
 
 		// Grade de horas
 		const areaScroll = container.createDiv({ cls: "mytasks-calendario-scroll-horas" });
@@ -447,8 +472,9 @@ export class MotorCalendario {
 
 		for (let hora = HORA_INICIAL_GRADE; hora <= HORA_FINAL_GRADE; hora++) {
 			gradeHoras.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: `${String(hora).padStart(2, "0")}:00` });
-			for (const { diaStr } of dias) {
+			dias.forEach(({ diaStr }, indice) => {
 				const celulaHora = gradeHoras.createDiv({ cls: "mytasks-calendario-celula-hora" });
+				if (indice === dias.length - 1) celulaHora.addClass("mytasks-calendario-ultima-coluna");
 				const tarefasHora = tarefas.filter((t) => {
 					if (t.data !== diaStr || !t.horario) return false;
 					const horaTarefa = parseInt(t.horario.split(":")[0], 10);
@@ -467,7 +493,7 @@ export class MotorCalendario {
 				const horarioClique = `${String(hora).padStart(2, "0")}:00`;
 				celulaHora.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr, horarioClique));
 				this.registrarAlvoDeSoltura(celulaHora, diaStr, horarioClique);
-			}
+			});
 		}
 	}
 

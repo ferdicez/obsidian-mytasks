@@ -375,6 +375,21 @@
 	min-width: 0;
 }
 
+.mytasks-titulo-linha {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+/* Bolinha colorida de destaque, logo após o título (cor da propriedade escolhida). */
+.mytasks-bolinha-destaque {
+	flex-shrink: 0;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
 .mytasks-titulo {
 	cursor: pointer;
 	font-size: 0.95em;
@@ -469,7 +484,8 @@
 .mytasks-calendario {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	/* Mesma distância cabeçalho→grade do Kanban (lá o cabeçalho tem margin-bottom: 12px). */
+	gap: 12px;
 	flex: 1;
 	min-height: 0;
 	--gt-borda: var(--background-modifier-border-hover, var(--background-modifier-border));
@@ -491,8 +507,8 @@
 	justify-content: space-between;
 	gap: 14px;
 	flex-wrap: wrap;
-	padding-bottom: 12px;
-	border-bottom: 1px solid var(--gt-borda-fraca);
+	/* Sem linha divisória embaixo — mesmo padrão do cabeçalho do Kanban. O espaçamento até a grade
+	   vem do gap: 12px do .mytasks-calendario (não de margin aqui), pra bater exatamente com o Kanban. */
 }
 
 .mytasks-calendario-cabecalho-lado {
@@ -541,10 +557,14 @@
 	background: var(--background-modifier-active-hover);
 }
 
+/* Mesmo tamanho/peso da palavra "Kanban" (um <h3>). No Kanban a distância ícone→"Kanban" é 10px
+   (gap 6px do cabeçalho + margin-right 4px do ícone). Aqui o lado esquerdo usa gap 14px e o ícone tem
+   margin-right 4px (= 18px), então -8px de margin no rótulo deixa a distância ícone→rótulo em 10px. */
 .mytasks-calendario-rotulo-periodo {
-	font-weight: 600;
-	font-size: 1.05em;
-	margin-left: 6px;
+	font-size: var(--h3-size, 1.17em);
+	font-weight: var(--h3-weight, 600);
+	line-height: var(--h3-line-height, 1.3);
+	margin-left: -8px;
 	letter-spacing: -0.01em;
 }
 
@@ -552,12 +572,33 @@
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
+	/* Moldura arredondada única para TODAS as views (mês, semana dias, semana horários, ano) — mesmo
+	   "quadro" que o Kanban tem. Moldura completa (4 lados) pra o canto arredondar limpo e a última
+	   coluna não estourar à direita. */
+	border: 1px solid var(--gt-borda-fraca);
+	border-radius: var(--gt-raio);
+}
+
+/* Nas duas visões semanais, preserva a espessura da moldura (e portanto todas as medidas), mas
+   deixa as laterais e a base invisíveis. O topo continua visível e reto, sem cantos curvados. */
+.mytasks-calendario-grade-area-semana {
+	border-color: var(--gt-borda-fraca) transparent transparent;
+	border-radius: 0;
 }
 
 .mytasks-calendario-grade-area-vertical {
 	display: flex;
 	flex-direction: column;
+	/* Herda a moldura arredondada completa do grade-area e recorta o conteúdo interno dentro dos cantos. */
 	overflow: hidden;
+	border-radius: inherit;
+}
+
+/* Respiro no topo, entre a moldura e a linha dos dias da semana (a Semana (dias) tem esse espaço via
+   o padding das colunas; a Semana (horários) não tinha nenhum). Só margin-top pra não desalinhar as
+   colunas das 3 grades empilhadas (elas precisam do mesmo grid-template-columns sem padding lateral). */
+.mytasks-calendario-grade-area-vertical .mytasks-calendario-cabecalho-semana-horarios {
+	margin-top: 8px;
 }
 
 /* Mês */
@@ -568,9 +609,7 @@
 	grid-template-rows: auto repeat(6, 1fr);
 	height: 100%;
 	min-height: 640px;
-	border-top: 1px solid var(--gt-borda-fraca);
-	border-left: 1px solid var(--gt-borda-fraca);
-	border-radius: var(--gt-raio);
+	/* A moldura arredondada agora fica no .mytasks-calendario-grade-area (comum a todas as views). */
 	overflow: hidden;
 }
 
@@ -611,13 +650,14 @@
 	background: var(--background-modifier-hover);
 }
 
+/* Dias fora do mês selecionado: só o NÚMERO fica mais claro; as linhas/bordas da célula
+   ficam com a mesma cor das demais (a opacidade não é mais aplicada na célula inteira). */
 .mytasks-calendario-fora-do-mes {
 	background: var(--background-primary);
-	opacity: 0.35;
 }
 
-.mytasks-calendario-fora-do-mes:hover {
-	opacity: 0.6;
+.mytasks-calendario-fora-do-mes .mytasks-calendario-numero-dia {
+	color: var(--text-faint);
 }
 
 .mytasks-calendario-hoje {
@@ -705,8 +745,10 @@
 	display: grid;
 	grid-template-columns: repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
 	gap: 0;
+	/* Ocupa toda a altura disponível do container; cada coluna rola por conta própria (não a grade
+	   inteira), pra sempre dar pra ver todas as tarefas de um dia mesmo quando há muitas. */
 	height: 100%;
-	min-height: 640px;
+	min-height: 0;
 	/* Sem moldura externa (border-left/top/radius) — as colunas usam só o separador border-right
 	   entre elas, igual à view "Semana (horários)", pra as linhas laterais ficarem com a mesma margem. */
 	overflow: hidden;
@@ -719,7 +761,9 @@
 	padding: 8px;
 	background: var(--background-primary);
 	border-right: 1px solid var(--gt-borda-coluna);
-	min-height: 200px;
+	/* min-height:0 permite a coluna encolher para dentro da grade; overflow-y:auto rola as tarefas. */
+	min-height: 0;
+	overflow-y: auto;
 	transition: background-color 0.15s ease;
 }
 
@@ -772,6 +816,12 @@
 	margin-bottom: 0;
 }
 
+/* Última coluna (sábado) do cabeçalho da Semana (horários): sem o separador à direita.
+   Seletor mais específico que a regra base pra vencer o border-right do cabeçalho acima. */
+.mytasks-calendario-cabecalho-semana-horarios .mytasks-calendario-cabecalho-coluna.mytasks-calendario-ultima-coluna {
+	border-right: none;
+}
+
 .mytasks-calendario-faixa-dia-inteiro {
 	display: grid;
 	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
@@ -785,8 +835,12 @@
 .mytasks-calendario-rotulo-faixa {
 	font-size: 0.68em;
 	color: var(--text-faint);
+	/* Centralizado na coluna de 56px. text-align (não flex) porque o "Dia" é um nó de texto solto —
+	   justify-content não centraliza texto puro de forma confiável. */
 	display: flex;
 	align-items: center;
+	justify-content: center;
+	text-align: center;
 }
 
 .mytasks-calendario-celula-dia-inteiro {
@@ -796,11 +850,20 @@
 	border-right: 1px solid var(--gt-borda-coluna);
 }
 
+/* Última coluna de dias (semana horários): sem o separador interno à direita — a borda externa da
+   moldura já fecha o quadro ali, então esse traço interno virava uma linha dupla. */
+.mytasks-calendario-ultima-coluna {
+	border-right: none;
+}
+
 .mytasks-calendario-scroll-horas {
 	overflow-y: auto;
 	scrollbar-gutter: stable;
 	flex: 1;
 	min-height: 0;
+	/* Espaço no topo pra o 1º rótulo de hora (07:00), que é deslocado pra cima com translateY e
+	   ficava cortado na borda superior da área de rolagem. */
+	padding-top: 0.7em;
 }
 
 .mytasks-calendario-grade-horas {
@@ -826,6 +889,12 @@
 	flex-direction: column;
 	gap: 2px;
 	transition: background-color 0.15s ease;
+}
+
+/* Última coluna (sábado): célula de hora sem o separador à direita. Seletor de 2 classes
+   pra vencer o border-right da regra base acima (que empata em especificidade com .ultima-coluna). */
+.mytasks-calendario-celula-hora.mytasks-calendario-ultima-coluna {
+	border-right: none;
 }
 
 .mytasks-calendario-celula-hora:hover {
@@ -993,4 +1062,116 @@
 
 .mytasks-kanban-alvo-soltura {
 	background: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+}
+
+/* ===== Grupos de tarefas ===== */
+
+/* Linha divisória cinza entre seções das Configurações (e da tela de grupos). */
+.mytasks-config-divisoria {
+	border: none;
+	border-top: 1px solid var(--background-modifier-border);
+	margin: 18px 0;
+}
+
+/* Cabeçalho ao entrar na configuração de um grupo: "‹ Grupos" + nome do grupo. */
+.mytasks-config-cabecalho-grupo {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.mytasks-config-voltar-grupos {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	background: var(--background-secondary);
+	border: none;
+	box-shadow: none;
+	border-radius: 8px;
+	font-size: 0.85em;
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.mytasks-config-voltar-grupos:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-config-nome-grupo {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+/* Preview do ícone Lucide de um grupo (na lista de grupos e no modal). */
+.mytasks-config-grupo-icone {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 8px;
+	color: var(--text-muted);
+}
+
+.mytasks-config-grupo-icone svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* Seletor de grupo (ícone discreto) no cabeçalho do Kanban/Calendário — herda o estilo só-ícone. */
+.mytasks-seletor-grupo {
+	margin-right: 4px;
+}
+
+/* Título "Destaque colorido" acima dos toggles de estilo. */
+.mytasks-destaque-titulo {
+	margin: 8px 0 4px;
+	font-size: 1em;
+	font-weight: 600;
+}
+
+/* Bloco de código de embed no modal de Visualização salva. */
+.mytasks-embed-bloco {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--background-secondary);
+}
+
+.mytasks-embed-barra {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mytasks-embed-rotulo {
+	font-size: 0.8em;
+	color: var(--text-muted);
+}
+
+.mytasks-embed-copiar {
+	padding: 3px 10px;
+	font-size: 0.8em;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: none;
+	cursor: pointer;
+	color: var(--text-normal);
+}
+
+.mytasks-embed-copiar:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-embed-codigo {
+	margin: 0;
+	padding: 10px;
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	white-space: pre;
+	overflow-x: auto;
+	background: transparent;
+	color: var(--text-normal);
 }

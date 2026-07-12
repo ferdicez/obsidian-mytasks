@@ -1,5 +1,5 @@
 import { App, parseYaml } from "obsidian";
-import { ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, obterVisualizacao } from "./tipos";
+import { ConfigEfetivaGrupo, ID_STATUS, Tarefa, TipoAgrupamento, obterVisualizacao } from "./tipos";
 import { compilarFiltro, condicoesDeFiltroYaml } from "./motor-filtro";
 
 interface ConfigBlocoKanban {
@@ -15,7 +15,7 @@ export interface BlocoKanbanCompilado {
 	filtroExtraPadraoId: string | null;
 }
 
-function agrupamentoValido(valor: string | undefined, configuracoes: ConfiguracoesGestorTarefas): TipoAgrupamento {
+function agrupamentoValido(valor: string | undefined, configuracoes: ConfigEfetivaGrupo): TipoAgrupamento {
 	if (!valor || valor === ID_STATUS) return ID_STATUS;
 	const existe = configuracoes.propriedades.some((p) => p.id === valor && p.tipo === "selecao");
 	return existe ? valor : ID_STATUS;
@@ -25,7 +25,7 @@ export function compilarBlocoKanban(
 	source: string,
 	app: App,
 	sourcePath: string,
-	configuracoes: ConfiguracoesGestorTarefas
+	configuracoes: ConfigEfetivaGrupo
 ): BlocoKanbanCompilado {
 	let config: ConfigBlocoKanban = {};
 	try {

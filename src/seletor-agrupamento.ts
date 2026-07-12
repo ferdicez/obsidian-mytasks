@@ -1,8 +1,8 @@
 import { Menu, setIcon } from "obsidian";
-import { ConfiguracoesGestorTarefas, ID_STATUS, TipoAgrupamento } from "./tipos";
+import { ConfigEfetivaGrupo, ID_STATUS, TipoAgrupamento } from "./tipos";
 
 export interface OpcoesSeletorAgrupamento {
-	configuracoes: ConfiguracoesGestorTarefas;
+	configuracoes: ConfigEfetivaGrupo;
 	agrupamentoAtual: TipoAgrupamento;
 	permitirNenhum: boolean;
 	permitirDia: boolean;
@@ -12,7 +12,7 @@ export interface OpcoesSeletorAgrupamento {
 	elementoAlinhamento?: HTMLElement;
 }
 
-export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: ConfiguracoesGestorTarefas): string {
+export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: ConfigEfetivaGrupo): string {
 	if (agrupamento === "nenhum") return "nenhum";
 	if (agrupamento === "dia") return "por dia";
 	if (agrupamento === ID_STATUS) return configuracoes.status.rotulo || "status";
@@ -20,7 +20,7 @@ export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: C
 }
 
 export function opcoesDeAgrupamento(
-	configuracoes: ConfiguracoesGestorTarefas,
+	configuracoes: ConfigEfetivaGrupo,
 	permitirNenhum: boolean,
 	permitirDia: boolean
 ): TipoAgrupamento[] {

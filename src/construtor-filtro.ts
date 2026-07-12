@@ -3,7 +3,7 @@ import {
 	AncoraPeriodo,
 	CombinacaoPeriodos,
 	CondicaoFiltro,
-	ConfiguracoesGestorTarefas,
+	ConfigEfetivaGrupo,
 	ID_STATUS,
 	OperadorPeriodo,
 	PeriodoFiltro,
@@ -46,7 +46,7 @@ const ANCORAS_POR_OPERADOR: Record<OperadorPeriodo, { valor: AncoraPeriodo; rotu
 
 export interface OpcoesConstrutorFiltro {
 	app: App;
-	configuracoes: ConfiguracoesGestorTarefas;
+	configuracoes: ConfigEfetivaGrupo;
 	repositorio: RepositorioTarefas;
 	condicoesIniciais: CondicaoFiltro[];
 	aoMudar: (condicoes: CondicaoFiltro[]) => void;

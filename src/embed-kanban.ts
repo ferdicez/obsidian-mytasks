@@ -1,5 +1,5 @@
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TAbstractFile, TFile } from "obsidian";
-import { ConfiguracoesGestorTarefas, arquivoEhTarefaRelevante } from "./tipos";
+import { ConfigEfetivaGrupo, arquivoEhTarefaRelevante } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { MotorKanban } from "./motor-kanban";
 import { compilarBlocoKanban } from "./filtro-kanban";
@@ -15,7 +15,7 @@ class EmbedKanban extends MarkdownRenderChild {
 		private ctx: MarkdownPostProcessorContext,
 		private app: App,
 		private repositorio: RepositorioTarefas,
-		private obterConfiguracoes: () => ConfiguracoesGestorTarefas
+		private obterConfiguracoes: () => ConfigEfetivaGrupo
 	) {
 		super(containerEl);
 		const compilado = compilarBlocoKanban(source, app, ctx.sourcePath, obterConfiguracoes());
@@ -57,7 +57,7 @@ export function registrarProcessadorKanban(
 	) => void,
 	app: App,
 	repositorio: RepositorioTarefas,
-	obterConfiguracoes: () => ConfiguracoesGestorTarefas
+	obterConfiguracoes: () => ConfigEfetivaGrupo
 ): void {
 	registerMarkdownCodeBlockProcessor(LINGUAGEM_BLOCO_KANBAN, (source, el, ctx) => {
 		const child = new EmbedKanban(el, source, ctx, app, repositorio, obterConfiguracoes);

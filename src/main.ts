@@ -1,5 +1,13 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
-import { CONFIGURACOES_PADRAO, ConfiguracoesGestorTarefas, normalizarChave } from "./tipos";
+import {
+	CONFIGURACOES_PADRAO,
+	ConfiguracoesGestorTarefas,
+	GRUPO_PADRAO,
+	GrupoTarefas,
+	configDoGrupo,
+	grupoAtivoOuPrimeiro,
+	normalizarChave,
+} from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { VistaLista, TIPO_VISTA_LISTA } from "./vista-lista";
 import { VistaListaAba, TIPO_VISTA_LISTA_ABA } from "./vista-lista-aba";
@@ -13,59 +21,64 @@ import { AbaConfiguracoes } from "./configuracoes";
 
 export default class MyTasksPlugin extends Plugin {
 	configuracoes: ConfiguracoesGestorTarefas = CONFIGURACOES_PADRAO;
+	// Repositório do grupo default (primeiro grupo). Views/embeds ainda single-group nesta fase o usam;
+	// na Fase 4 cada view pega o repositório do seu próprio grupo via repositorioDoGrupo().
 	repositorio!: RepositorioTarefas;
+	private repositoriosPorGrupo = new Map<string, RepositorioTarefas>();
+	private ribbonsDeGrupos: HTMLElement[] = [];
+
+	// Uma instância de RepositorioTarefas por grupo, memoizada. Cada uma lê a config EFETIVA do seu grupo
+	// (pastas, chave de data, propriedades, status próprios) — mantém o repositório stateless e desacoplado da UI.
+	repositorioDoGrupo(grupoId: string): RepositorioTarefas {
+		let repo = this.repositoriosPorGrupo.get(grupoId);
+		if (!repo) {
+			repo = new RepositorioTarefas(this.app, () => {
+				const grupo = grupoAtivoOuPrimeiro(this.configuracoes, grupoId);
+				return configDoGrupo(this.configuracoes, grupo);
+			});
+			this.repositoriosPorGrupo.set(grupoId, repo);
+		}
+		return repo;
+	}
+
+	grupoDefault(): GrupoTarefas {
+		return this.configuracoes.grupos[0];
+	}
 
 	async onload() {
 		await this.carregarConfiguracoes();
 
-		this.repositorio = new RepositorioTarefas(this.app, () => this.configuracoes);
+		this.repositorio = this.repositorioDoGrupo(this.grupoDefault().id);
 
-		this.registerView(
-			TIPO_VISTA_LISTA,
-			(leaf) => new VistaLista(leaf, this.repositorio, this.configuracoes)
-		);
-		this.registerView(
-			TIPO_VISTA_LISTA_ABA,
-			(leaf) => new VistaListaAba(leaf, this.repositorio, this.configuracoes)
-		);
-		this.registerView(
-			TIPO_VISTA_CALENDARIO_SIDEBAR,
-			(leaf) => new VistaCalendarioSidebar(leaf, this.repositorio, this.configuracoes)
-		);
-		this.registerView(
-			TIPO_VISTA_CALENDARIO_ABA,
-			(leaf) => new VistaCalendarioAba(leaf, this.repositorio, this.configuracoes)
-		);
+		this.registerView(TIPO_VISTA_LISTA, (leaf) => new VistaLista(leaf, this));
+		this.registerView(TIPO_VISTA_LISTA_ABA, (leaf) => new VistaListaAba(leaf, this));
+		this.registerView(TIPO_VISTA_CALENDARIO_SIDEBAR, (leaf) => new VistaCalendarioSidebar(leaf, this));
+		this.registerView(TIPO_VISTA_CALENDARIO_ABA, (leaf) => new VistaCalendarioAba(leaf, this));
+		this.registerView(TIPO_VISTA_KANBAN_ABA, (leaf) => new VistaKanbanAba(leaf, this));
 
 		registrarProcessadorCalendario(
 			(linguagem, handler) => this.registerMarkdownCodeBlockProcessor(linguagem, handler),
 			this.app,
 			this.repositorio,
-			() => this.configuracoes
+			() => configDoGrupo(this.configuracoes, this.grupoDefault())
 		);
 
 		registrarProcessadorLista(
 			(linguagem, handler) => this.registerMarkdownCodeBlockProcessor(linguagem, handler),
 			this.app,
 			this.repositorio,
-			() => this.configuracoes
-		);
-
-		this.registerView(
-			TIPO_VISTA_KANBAN_ABA,
-			(leaf) => new VistaKanbanAba(leaf, this.repositorio, this.configuracoes)
+			() => configDoGrupo(this.configuracoes, this.grupoDefault())
 		);
 
 		registrarProcessadorKanban(
 			(linguagem, handler) => this.registerMarkdownCodeBlockProcessor(linguagem, handler),
 			this.app,
 			this.repositorio,
-			() => this.configuracoes
+			() => configDoGrupo(this.configuracoes, this.grupoDefault())
 		);
 
-		this.addRibbonIcon("check-square", "Abrir My Tasks", () => {
-			this.ativarVistaLista();
-		});
+		// Um ícone de ribbon por grupo (a Lista da sidebar) — cada um abre a lista do seu grupo.
+		this.registrarRibbonsDeGrupos();
 
 		this.addRibbonIcon("calendar-days", "Abrir Calendário de Tarefas", () => {
 			this.ativarVistaCalendarioAba();
@@ -78,7 +91,7 @@ export default class MyTasksPlugin extends Plugin {
 		this.addCommand({
 			id: "abrir-lista-tarefas",
 			name: "Abrir lista de tarefas",
-			callback: () => this.ativarVistaLista(),
+			callback: () => this.ativarVistaLista(this.grupoDefault().id),
 		});
 
 		this.addCommand({
@@ -116,8 +129,29 @@ export default class MyTasksPlugin extends Plugin {
 		this.app.workspace.detachLeavesOfType(TIPO_VISTA_KANBAN_ABA);
 	}
 
-	async ativarVistaLista() {
-		await this.ativarVistaEmSidebar(TIPO_VISTA_LISTA);
+	// (Re)cria os ícones de ribbon da Lista, um por grupo. Chamado no onload e sempre que grupos/ícones mudam.
+	registrarRibbonsDeGrupos(): void {
+		for (const el of this.ribbonsDeGrupos) el.remove();
+		this.ribbonsDeGrupos = [];
+		for (const grupo of this.configuracoes.grupos) {
+			const el = this.addRibbonIcon(grupo.icone, `Abrir ${grupo.nome}`, () => this.ativarVistaLista(grupo.id));
+			this.ribbonsDeGrupos.push(el);
+		}
+	}
+
+	async ativarVistaLista(grupoId: string) {
+		const { workspace } = this.app;
+		// Procura uma leaf da Lista já aberta com esse grupoId; senão cria uma nova na sidebar direita.
+		const existente = workspace
+			.getLeavesOfType(TIPO_VISTA_LISTA)
+			.find((leaf) => (leaf.getViewState().state as { grupoId?: string } | undefined)?.grupoId === grupoId);
+
+		let leaf: WorkspaceLeaf | null = existente ?? null;
+		if (!leaf) {
+			leaf = workspace.getRightLeaf(false);
+			await leaf?.setViewState({ type: TIPO_VISTA_LISTA, active: true, state: { grupoId } });
+		}
+		if (leaf) workspace.revealLeaf(leaf);
 	}
 
 	async ativarVistaListaAba() {
@@ -129,7 +163,7 @@ export default class MyTasksPlugin extends Plugin {
 			leaf = folhasExistentes[0];
 		} else {
 			leaf = workspace.getLeaf("tab");
-			await leaf.setViewState({ type: TIPO_VISTA_LISTA_ABA, active: true });
+			await leaf.setViewState({ type: TIPO_VISTA_LISTA_ABA, active: true, state: { grupoId: this.grupoDefault().id } });
 		}
 
 		workspace.revealLeaf(leaf);
@@ -186,45 +220,85 @@ export default class MyTasksPlugin extends Plugin {
 
 	async carregarConfiguracoes() {
 		const dadosSalvos = ((await this.loadData()) ?? {}) as Record<string, unknown>;
-		this.configuracoes = Object.assign({}, CONFIGURACOES_PADRAO, dadosSalvos);
 
-		// Instalações salvas antes do campo `chave` existir: assume que a chave técnica já usada
-		// no frontmatter das notas segue a normalização do rótulo salvo (é o caso quando a chave
-		// nunca foi renomeada manualmente, ou quando foi renomeada com o mesmo texto do rótulo).
-		if (!this.configuracoes.dataTarefa.chave) {
-			this.configuracoes.dataTarefa.chave = normalizarChave(this.configuracoes.dataTarefa.rotulo);
+		// Formato antigo (single-group): tinha os campos planos no topo (status/…) e nenhum `grupos`.
+		// Envelopamos essa config plana como o PRIMEIRO grupo, sem clobber — os campos planos viram do grupo.
+		const ehFormatoAntigo = dadosSalvos.grupos === undefined && dadosSalvos.status !== undefined;
+
+		let precisaSalvar = false;
+
+		if (ehFormatoAntigo) {
+			const grupo = { ...GRUPO_PADRAO, ...dadosSalvos } as GrupoTarefas;
+			grupo.id = "grupo_padrao";
+			grupo.valorDiscriminador = "";
+			grupo.nome = "Tarefas";
+			grupo.icone = "check-square";
+			// Remove campos que não pertencem ao grupo (vieram do topo antigo, se existirem).
+			delete (grupo as unknown as Record<string, unknown>).grupos;
+			delete (grupo as unknown as Record<string, unknown>).propriedadeGrupo;
+			this.migrarCamposDeGrupo(grupo, dadosSalvos);
+			this.configuracoes = {
+				propriedadeGrupo: null,
+				grupos: [grupo],
+				grupoAtivoKanbanId: grupo.id,
+				grupoAtivoCalendarioId: grupo.id,
+			};
+			precisaSalvar = true; // grava já no formato novo (idempotente)
+		} else {
+			this.configuracoes = Object.assign({}, CONFIGURACOES_PADRAO, dadosSalvos);
+			if (this.configuracoes.grupos.length === 0) {
+				this.configuracoes.grupos = [{ ...GRUPO_PADRAO }];
+			}
+			// Garante campos novos de grupo em instalações já no formato novo + reaplica migrações por grupo.
+			const gruposSalvos = (dadosSalvos.grupos ?? []) as Record<string, unknown>[];
+			this.configuracoes.grupos = this.configuracoes.grupos.map((grupoSalvo, i) => {
+				const grupo = Object.assign({}, GRUPO_PADRAO, grupoSalvo) as GrupoTarefas;
+				this.migrarCamposDeGrupo(grupo, gruposSalvos[i] ?? {});
+				return grupo;
+			});
 		}
 
-		// Migração: até a versão anterior, só uma propriedade podia controlar o destaque visual
-		// (campo único `destaque`). Agora cada estilo (checkbox/linha/borda) tem seu próprio dono,
-		// então o valor antigo vira a entrada correspondente ao estilo que ele já usava.
-		const destaqueAntigo = dadosSalvos.destaque as
+		if (precisaSalvar) {
+			await this.salvarConfiguracoes();
+		}
+	}
+
+	// Reaplica as migrações de campo (que antes eram globais) agora no escopo de UM grupo.
+	private migrarCamposDeGrupo(grupo: GrupoTarefas, dadosDoGrupo: Record<string, unknown>): void {
+		// Chave técnica da data ausente: deriva da normalização do rótulo salvo.
+		if (!grupo.dataTarefa.chave) {
+			grupo.dataTarefa.chave = normalizarChave(grupo.dataTarefa.rotulo);
+		}
+
+		// `destaque` (campo único antigo) -> `destaques` (um dono por estilo).
+		const destaqueAntigo = dadosDoGrupo.destaque as
 			| { propriedadeId: string; estilo: "checkbox" | "linha" | "borda"; espessuraCheckbox?: "fina" | "media" | "grossa" }
 			| null
 			| undefined;
-		if (destaqueAntigo && Object.keys(this.configuracoes.destaques).length === 0) {
-			this.configuracoes.destaques = {
+		if (destaqueAntigo && Object.keys(grupo.destaques ?? {}).length === 0) {
+			grupo.destaques = {
 				[destaqueAntigo.estilo]: {
 					propriedadeId: destaqueAntigo.propriedadeId,
 					estilo: destaqueAntigo.estilo,
 					espessuraCheckbox: destaqueAntigo.espessuraCheckbox ?? "media",
 				},
 			};
-			await this.salvarConfiguracoes();
 		}
 
-		// Migração: antes, "propriedades visíveis no calendário" era um único campo, usado apenas
-		// pela visão semana-kanban (as outras sempre ocultavam tudo). Preserva esse valor só nela;
-		// as demais visões começam vazias (comportamento visual que já existia) até serem configuradas.
-		const calendarioPropriedadesVisiveisAntigo = dadosSalvos.calendarioPropriedadesVisiveis as string[] | null | undefined;
-		if (calendarioPropriedadesVisiveisAntigo !== undefined && !dadosSalvos.calendarioPropriedadesVisiveisPorModo) {
-			this.configuracoes.calendarioPropriedadesVisiveisPorModo = {
+		// `calendarioPropriedadesVisiveis` (campo único) -> `...PorModo`, preservando só na semana-kanban.
+		const calendarioPropriedadesVisiveisAntigo = dadosDoGrupo.calendarioPropriedadesVisiveis as string[] | null | undefined;
+		if (calendarioPropriedadesVisiveisAntigo !== undefined && !dadosDoGrupo.calendarioPropriedadesVisiveisPorModo) {
+			grupo.calendarioPropriedadesVisiveisPorModo = {
 				mes: [],
 				"semana-horarios": [],
 				"semana-kanban": calendarioPropriedadesVisiveisAntigo,
 				ano: [],
 			};
-			await this.salvarConfiguracoes();
+		}
+
+		// Estilo de destaque "linha inteira" foi removido — descarta qualquer entrada salva desse estilo.
+		if (grupo.destaques && "linha" in grupo.destaques) {
+			delete (grupo.destaques as Record<string, unknown>).linha;
 		}
 	}
 

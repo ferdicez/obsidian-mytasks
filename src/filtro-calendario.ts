@@ -1,5 +1,5 @@
 import { App, parseYaml } from "obsidian";
-import { ConfiguracoesGestorTarefas, ModoCalendario, Tarefa } from "./tipos";
+import { ConfigEfetivaGrupo, ModoCalendario, Tarefa } from "./tipos";
 import { compilarFiltro, condicoesDeFiltroYaml } from "./motor-filtro";
 
 interface ConfigBlocoCalendario {
@@ -18,7 +18,7 @@ export function compilarBlocoCalendario(
 	source: string,
 	app: App,
 	sourcePath: string,
-	configuracoes: ConfiguracoesGestorTarefas
+	configuracoes: ConfigEfetivaGrupo
 ): BlocoCalendarioCompilado {
 	let config: ConfigBlocoCalendario = {};
 	try {

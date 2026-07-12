@@ -1,5 +1,5 @@
 import { App, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, obterFiltroSalvo } from "./tipos";
+import { CondicaoFiltro, ConfigEfetivaGrupo, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, obterFiltroSalvo } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA } from "./render-tarefa";
@@ -7,11 +7,12 @@ import { agruparTarefas } from "./motor-agrupamento";
 import { compilarFiltro } from "./motor-filtro";
 import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
 import { SeletorAgrupamento } from "./seletor-agrupamento";
+import { SeletorGrupo } from "./seletor-grupo";
 
 export interface OpcoesMotorKanban {
 	app: App;
 	repositorio: RepositorioTarefas;
-	configuracoes: ConfiguracoesGestorTarefas;
+	configuracoes: ConfigEfetivaGrupo;
 	agrupamentoInicial?: TipoAgrupamento;
 	filtro?: (tarefa: Tarefa) => boolean;
 	// Filtro salvo pré-selecionado ao abrir (ex: filtro padrão configurado em Configurações, ou o filtro
@@ -22,6 +23,11 @@ export interface OpcoesMotorKanban {
 	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
 	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento da Lista/Kanban geral).
 	filtrosExtrasIds?: string[];
+	// Seletor de grupo (view única): config global para listar grupos + grupo ativo + callback de troca.
+	// Só desenha o ícone quando há mais de um grupo. Ausente = embed/contexto sem troca de grupo.
+	configuracoesGlobais?: ConfiguracoesGestorTarefas;
+	grupoAtivoId?: string;
+	aoTrocarGrupo?: (grupoId: string) => void;
 }
 
 export class MotorKanban {
@@ -137,6 +143,20 @@ export class MotorKanban {
 
 	private desenharCabecalho(): void {
 		const cabecalho = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
+
+		// Ícone discreto de troca de grupo, ANTES da palavra "Kanban" (só quando há mais de um grupo).
+		if (this.opcoes.configuracoesGlobais && this.opcoes.grupoAtivoId && this.opcoes.aoTrocarGrupo) {
+			const cfgGlobal = this.opcoes.configuracoesGlobais;
+			if (cfgGlobal.grupos.length > 1) {
+				new SeletorGrupo(cabecalho, {
+					configuracoes: cfgGlobal,
+					grupoAtivoId: this.opcoes.grupoAtivoId,
+					icone: "square-kanban",
+					aoEscolher: (grupoId) => this.opcoes.aoTrocarGrupo!(grupoId),
+				});
+			}
+		}
+
 		cabecalho.createEl("h3", { text: "Kanban" });
 
 		// Sem elementoAlinhamento: os menus descem alinhados ao próprio botão clicado (igual ao

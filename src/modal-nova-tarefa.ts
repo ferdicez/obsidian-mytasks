@@ -1,6 +1,6 @@
 import { App, DropdownComponent, Modal, Setting, TFile } from "obsidian";
 import {
-	ConfiguracoesGestorTarefas,
+	ConfigEfetivaGrupo,
 	PropriedadeDefinida,
 	PropriedadeValor,
 	Recorrencia,
@@ -37,7 +37,7 @@ export class ModalNovaTarefa extends Modal {
 
 	constructor(
 		app: App,
-		private configuracoes: ConfiguracoesGestorTarefas,
+		private configuracoes: ConfigEfetivaGrupo,
 		private repositorio: RepositorioTarefas,
 		private aoConfirmar: (titulo: string, dados: DadosTarefaEscrita) => void,
 		valoresIniciais?: ValoresIniciaisTarefa,
@@ -245,16 +245,20 @@ export class ModalNovaTarefa extends Modal {
 		const estavaConcluida = this.tarefaExistente.status === concluido;
 		const continuaConcluida = dados.status === concluido;
 
+		// O título é o nome do arquivo: se mudou, renomeia primeiro e usa o caminho atualizado no resto.
+		const caminhoRenomeado = await this.repositorio.renomearTarefa(this.tarefaExistente, this.titulo.trim());
+		const tarefaAtual: Tarefa = { ...this.tarefaExistente, caminho: caminhoRenomeado };
+
 		if (estavaConcluida && !continuaConcluida) {
 			// Desfazer a conclusão pode mover o arquivo de volta para a pasta de ativas — grava o
 			// resto dos campos editados no modal só depois, contra o caminho atualizado.
-			const arquivoAtualizado = await this.repositorio.desfazerConclusao(this.tarefaExistente, dados.status);
+			const arquivoAtualizado = await this.repositorio.desfazerConclusao(tarefaAtual, dados.status);
 			await this.repositorio.atualizarTarefaCompleta(
-				{ ...this.tarefaExistente, caminho: arquivoAtualizado?.path ?? this.tarefaExistente.caminho },
+				{ ...tarefaAtual, caminho: arquivoAtualizado?.path ?? tarefaAtual.caminho },
 				dados
 			);
 		} else {
-			await this.repositorio.atualizarTarefaCompleta(this.tarefaExistente, dados);
+			await this.repositorio.atualizarTarefaCompleta(tarefaAtual, dados);
 		}
 
 		this.aoAtualizar?.();

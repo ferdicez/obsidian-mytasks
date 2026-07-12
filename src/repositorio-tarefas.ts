@@ -1,6 +1,6 @@
 import { App, TFile, TFolder, normalizePath, parseYaml } from "obsidian";
 import {
-	ConfiguracoesGestorTarefas,
+	ConfigEfetivaGrupo,
 	PropriedadeValor,
 	Recorrencia,
 	REGEX_HORARIO,
@@ -38,7 +38,7 @@ function sanitizarNomeArquivo(titulo: string): string {
 }
 
 export class RepositorioTarefas {
-	constructor(private app: App, private obterConfiguracoes: () => ConfiguracoesGestorTarefas) {}
+	constructor(private app: App, private obterConfiguracoes: () => ConfigEfetivaGrupo) {}
 
 	private async garantirPasta(caminho: string): Promise<TFolder> {
 		const normalizado = normalizePath(caminho);
@@ -93,14 +93,19 @@ export class RepositorioTarefas {
 	private montarTarefa(arquivo: TFile, fm: Record<string, unknown>): Tarefa | null {
 		if (!fm.status) return null;
 
-		const { propriedades, dataTarefa } = this.obterConfiguracoes();
+		const config = this.obterConfiguracoes();
+		const { propriedades, dataTarefa } = config;
 		const chaveData = dataTarefa.chave ?? "data";
 		const valorData = fm[chaveData];
+
+		const propriedadeGrupo = config.__propriedadeGrupo ?? null;
+		const valorGrupoBruto = propriedadeGrupo ? fm[propriedadeGrupo] : null;
 
 		return {
 			caminho: arquivo.path,
 			titulo: arquivo.basename,
 			status: fm.status as string,
+			valorGrupo: typeof valorGrupoBruto === "string" ? valorGrupoBruto : null,
 			statusAnterior: typeof fm.status_anterior === "string" ? fm.status_anterior : null,
 			data: typeof valorData === "string" ? valorData : null,
 			dataEntrada: typeof fm.data_entrada === "string" ? fm.data_entrada : formatarData(new Date(arquivo.stat.ctime)),
@@ -150,10 +155,15 @@ export class RepositorioTarefas {
 		}
 
 		const arquivo = await this.app.vault.create(caminho, "");
-		const { propriedades, dataTarefa } = this.obterConfiguracoes();
+		const config = this.obterConfiguracoes();
+		const { propriedades, dataTarefa } = config;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
 			fm.data_entrada = formatarData(new Date());
+			// Carimba o discriminador de grupo (quando configurado) para a tarefa nascer já no grupo certo.
+			if (config.__propriedadeGrupo) {
+				fm[config.__propriedadeGrupo] = config.__valorGrupo ?? "";
+			}
 		});
 		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;
@@ -181,6 +191,27 @@ export class RepositorioTarefas {
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
 		});
+	}
+
+	// Renomeia o arquivo da tarefa quando o título muda (o título É o nome do arquivo). Desambigua com
+	// "nome 2.md" se já existir outro na mesma pasta. Retorna o novo caminho (ou o antigo, se nada mudou).
+	async renomearTarefa(tarefa: Tarefa, novoTitulo: string): Promise<string> {
+		const arquivo = this.app.vault.getAbstractFileByPath(tarefa.caminho);
+		if (!(arquivo instanceof TFile)) return tarefa.caminho;
+
+		const nomeLimpo = sanitizarNomeArquivo(novoTitulo);
+		if (!nomeLimpo || nomeLimpo === arquivo.basename) return tarefa.caminho;
+
+		const pasta = arquivo.parent?.path ?? "";
+		let destino = normalizePath(pasta ? `${pasta}/${nomeLimpo}.md` : `${nomeLimpo}.md`);
+		let contador = 1;
+		while (destino !== tarefa.caminho && this.app.vault.getAbstractFileByPath(destino)) {
+			destino = normalizePath(pasta ? `${pasta}/${nomeLimpo} ${++contador}.md` : `${nomeLimpo} ${++contador}.md`);
+		}
+		if (destino === tarefa.caminho) return tarefa.caminho;
+
+		await this.app.fileManager.renameFile(arquivo, destino);
+		return destino;
 	}
 
 	async atualizarData(tarefa: Tarefa, novaData: string, novoHorario?: string | null): Promise<void> {

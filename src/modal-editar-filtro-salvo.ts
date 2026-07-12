@@ -1,5 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
-import { CondicaoFiltro, ConfiguracoesGestorTarefas, FiltroSalvo } from "./tipos";
+import { CondicaoFiltro, ConfigEfetivaGrupo, FiltroSalvo } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ConstrutorFiltro } from "./construtor-filtro";
 
@@ -15,7 +15,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 	constructor(
 		app: App,
 		private filtroExistente: FiltroSalvo | null,
-		private configuracoes: ConfiguracoesGestorTarefas,
+		private configuracoes: ConfigEfetivaGrupo,
 		private repositorio: RepositorioTarefas,
 		private aoSalvar: (filtro: FiltroSalvo) => void
 	) {
