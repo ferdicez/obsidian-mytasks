@@ -18,6 +18,7 @@ import {
 	VisualizacaoSalva,
 	configDoGrupo,
 	grupoAtivoOuPrimeiro,
+	migrarReferenciasPropriedade,
 	normalizarChave,
 } from "./tipos";
 import { ModalEditarGrupo } from "./modal-editar-grupo";
@@ -371,7 +372,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 							await this.plugin.salvarConfiguracoes();
 							this.display();
 						},
-						this.plugin.repositorioDoGrupo(this.grupo.id)
+						this.plugin.repositorioDoGrupo(this.grupo.id),
+						this.grupo.propriedades
 					).open();
 				})
 		);
@@ -712,6 +714,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 						propriedade,
 						propriedade.ordem,
 						async (atualizada) => {
+							migrarReferenciasPropriedade(this.grupo, propriedade.id, atualizada.id);
 							const indice = this.grupo.propriedades.findIndex(
 								(p) => p.id === propriedade.id
 							);
@@ -719,7 +722,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 							await this.plugin.salvarConfiguracoes();
 							this.display();
 						},
-						this.plugin.repositorioDoGrupo(this.grupo.id)
+						this.plugin.repositorioDoGrupo(this.grupo.id),
+						this.grupo.propriedades
 					).open();
 				})
 		);

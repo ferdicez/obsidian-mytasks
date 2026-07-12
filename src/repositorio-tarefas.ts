@@ -435,6 +435,32 @@ export class RepositorioTarefas {
 		});
 	}
 
+	// Renomeia a CHAVE de uma propriedade no frontmatter de todas as tarefas do grupo (não só o rótulo
+	// exibido no plugin). Usado quando a usuária muda o "id"/chave técnica de uma propriedade em
+	// Configurações — sem isso, o plugin continuaria lendo/escrevendo a chave antiga, que já não existe
+	// mais no arquivo, e a tarefa pareceria ter perdido o valor (bug relatado com a propriedade "referência").
+	async renomearChavePropriedade(idAntigo: string, idNovo: string): Promise<number> {
+		if (idAntigo === idNovo) return 0;
+		const configuracoes = this.obterConfiguracoes();
+		const arquivos = this.app.vault.getMarkdownFiles().filter((f) => arquivoEhTarefaRelevante(configuracoes, f.path));
+
+		let migrados = 0;
+		for (const arquivo of arquivos) {
+			const cache = this.app.metadataCache.getFileCache(arquivo);
+			if (!cache?.frontmatter || !(idAntigo in cache.frontmatter)) continue;
+
+			await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
+				if (!(idAntigo in fm)) return;
+				const valorExistenteNaChaveNova = fm[idNovo];
+				const temValorNaChaveNova = valorExistenteNaChaveNova !== undefined && valorExistenteNaChaveNova !== null && valorExistenteNaChaveNova !== "";
+				if (!temValorNaChaveNova) fm[idNovo] = fm[idAntigo];
+				delete fm[idAntigo];
+			});
+			migrados++;
+		}
+		return migrados;
+	}
+
 	async excluirTarefa(tarefa: Tarefa): Promise<void> {
 		const arquivo = this.app.vault.getAbstractFileByPath(tarefa.caminho);
 		if (arquivo instanceof TFile) {

@@ -1,4 +1,4 @@
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal, Notice, Setting } from "obsidian";
 import { OpcaoSelecao, PropriedadeDefinida, TipoPropriedade } from "./tipos";
 import { ListaOpcoesGerenciada } from "./lista-opcoes-gerenciada";
 import { ListaArquivosGerenciada } from "./lista-arquivos-gerenciada";
@@ -27,19 +27,22 @@ export class ModalEditarPropriedade extends Modal {
 	private tipo: TipoPropriedade;
 	private opcoes: OpcaoSelecao[];
 	private arquivosFixos: string[];
+	private chave: string;
 
 	constructor(
 		app: App,
 		private propriedadeExistente: PropriedadeDefinida | null,
 		private proximaOrdem: number,
 		private aoSalvar: (propriedade: PropriedadeDefinida) => void,
-		private repositorio?: RepositorioTarefas
+		private repositorio?: RepositorioTarefas,
+		private propriedadesExistentes: PropriedadeDefinida[] = []
 	) {
 		super(app);
 		this.rotulo = propriedadeExistente?.rotulo ?? "";
 		this.tipo = propriedadeExistente?.tipo ?? "texto";
 		this.opcoes = (propriedadeExistente?.opcoes ?? []).map((o) => ({ ...o }));
 		this.arquivosFixos = [...(propriedadeExistente?.arquivosFixos ?? [])];
+		this.chave = propriedadeExistente?.id ?? "";
 	}
 
 	onOpen() {
@@ -49,6 +52,19 @@ export class ModalEditarPropriedade extends Modal {
 		new Setting(contentEl).setName("Nome").addText((text) =>
 			text.setValue(this.rotulo).onChange((valor) => (this.rotulo = valor))
 		);
+
+		// Só propriedade já existente tem essa chave editável: numa propriedade nova ela nasce
+		// derivada do Nome (comportamento de sempre). "Nome" é só o rótulo exibido no plugin — a chave
+		// abaixo é o nome real usado no frontmatter (YAML) da nota. Mudar só o Nome NÃO renomeia a
+		// chave; pra isso é preciso mexer aqui (e o plugin migra o frontmatter das tarefas existentes).
+		if (this.propriedadeExistente) {
+			new Setting(contentEl)
+				.setName("Chave no frontmatter (avançado)")
+				.setDesc(
+					"Nome real da propriedade dentro da nota. Mudar aqui renomeia essa chave em todas as tarefas existentes — diferente de só mudar o Nome acima."
+				)
+				.addText((text) => text.setValue(this.chave).onChange((valor) => (this.chave = valor)));
+		}
 
 		new Setting(contentEl).setName("Tipo").addDropdown((dropdown) => {
 			for (const chave of Object.keys(ROTULOS_TIPO) as TipoPropriedade[]) {
@@ -88,10 +104,27 @@ export class ModalEditarPropriedade extends Modal {
 			btn
 				.setButtonText("Salvar")
 				.setCta()
-				.onClick(() => {
+				.onClick(async () => {
 					if (!this.rotulo.trim()) return;
-					const id = this.propriedadeExistente?.id ?? gerarId(this.rotulo);
+					const id = this.propriedadeExistente
+						? gerarId(this.chave) || this.propriedadeExistente.id
+						: gerarId(this.rotulo);
 					if (!id) return;
+
+					const idAntigo = this.propriedadeExistente?.id;
+					if (idAntigo && id !== idAntigo) {
+						const colisao = this.propriedadesExistentes.some((p) => p.id !== idAntigo && p.id === id);
+						if (colisao) {
+							new Notice(`Já existe outra propriedade com a chave "${id}". Escolha outra.`);
+							return;
+						}
+						const confirmado = confirm(
+							`Renomear a chave "${idAntigo}" para "${id}"? Isso reescreve o frontmatter de todas as tarefas existentes que usam essa propriedade.`
+						);
+						if (!confirmado) return;
+						const migrados = (await this.repositorio?.renomearChavePropriedade(idAntigo, id)) ?? 0;
+						new Notice(`Chave renomeada em ${migrados} tarefa(s).`);
+					}
 
 					this.aoSalvar({
 						id,

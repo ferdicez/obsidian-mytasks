@@ -306,6 +306,39 @@ export function normalizarChave(rotulo: string): string {
 	return normalizado || "data";
 }
 
+// Atualiza toda referência a uma propriedade (por id) espalhada pela config do grupo, quando o id dela
+// muda (ver ModalEditarPropriedade). Sem isso, agrupamento padrão, propriedades visíveis, destaque e
+// condições de filtro salvas ficariam "presas" apontando pro id antigo, que deixou de existir.
+export function migrarReferenciasPropriedade(grupo: GrupoTarefas, idAntigo: string, idNovo: string): void {
+	if (idAntigo === idNovo) return;
+
+	const trocarLista = (lista: string[] | null): string[] | null =>
+		lista ? lista.map((v) => (v === idAntigo ? idNovo : v)) : lista;
+
+	grupo.kanbanPropriedadesVisiveis = trocarLista(grupo.kanbanPropriedadesVisiveis);
+	grupo.listaPropriedadesVisiveis = trocarLista(grupo.listaPropriedadesVisiveis);
+	grupo.listaInboxPropriedadesVisiveis = trocarLista(grupo.listaInboxPropriedadesVisiveis);
+	for (const modo of Object.keys(grupo.calendarioPropriedadesVisiveisPorModo) as ModoCalendario[]) {
+		grupo.calendarioPropriedadesVisiveisPorModo[modo] = trocarLista(grupo.calendarioPropriedadesVisiveisPorModo[modo]);
+	}
+
+	if (grupo.agrupamentoPadraoKanban === idAntigo) grupo.agrupamentoPadraoKanban = idNovo;
+	if (grupo.agrupamentoPadraoLista === idAntigo) grupo.agrupamentoPadraoLista = idNovo;
+
+	for (const estilo of Object.keys(grupo.destaques) as EstiloDestaque[]) {
+		const destaque = grupo.destaques[estilo];
+		if (destaque?.propriedadeId === idAntigo) destaque.propriedadeId = idNovo;
+	}
+
+	const migrarCondicoes = (condicoes: CondicaoFiltro[]) => {
+		for (const condicao of condicoes) {
+			if (condicao.propriedadeId === idAntigo) condicao.propriedadeId = idNovo;
+		}
+	};
+	for (const filtro of grupo.filtrosSalvos) migrarCondicoes(filtro.condicoes);
+	for (const view of grupo.visualizacoesSalvas) migrarCondicoes(view.condicoes);
+}
+
 export function ultimaOpcaoStatus(status: ConfigStatus): string | undefined {
 	return status.opcoes[status.opcoes.length - 1]?.valor;
 }
