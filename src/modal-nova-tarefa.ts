@@ -143,27 +143,29 @@ export class ModalNovaTarefa extends Modal {
 		this.divCamposComData = contentEl.createDiv();
 		this.divCamposComData.toggle(!!this.data);
 
-		new Setting(this.divCamposComData).setName("Recorrência").addDropdown((dropdown) => {
-			for (const chave of Object.keys(RECORRENCIA_LABELS) as Recorrencia[]) {
-				dropdown.addOption(chave, RECORRENCIA_LABELS[chave]);
-			}
-			dropdown.setValue(this.recorrencia).onChange((valor) => {
-				this.recorrencia = valor as Recorrencia;
-				divRecorrencia.toggle(this.recorrencia !== "nenhuma");
+		if (this.configuracoes.recorrenciaAtiva) {
+			new Setting(this.divCamposComData).setName("Recorrência").addDropdown((dropdown) => {
+				for (const chave of Object.keys(RECORRENCIA_LABELS) as Recorrencia[]) {
+					dropdown.addOption(chave, RECORRENCIA_LABELS[chave]);
+				}
+				dropdown.setValue(this.recorrencia).onChange((valor) => {
+					this.recorrencia = valor as Recorrencia;
+					divRecorrencia.toggle(this.recorrencia !== "nenhuma");
+				});
 			});
-		});
 
-		const divRecorrencia = this.divCamposComData.createDiv();
-		divRecorrencia.toggle(this.recorrencia !== "nenhuma");
+			const divRecorrencia = this.divCamposComData.createDiv();
+			divRecorrencia.toggle(this.recorrencia !== "nenhuma");
 
-		new Setting(divRecorrencia)
-			.setName("Repetir até")
-			.setDesc("Deixe em branco para repetir sem data final.")
-			.addText((text) => {
-				text.inputEl.type = "date";
-				if (this.recorrenciaDataFim) text.setValue(this.recorrenciaDataFim);
-				text.onChange((valor) => (this.recorrenciaDataFim = valor || null));
-			});
+			new Setting(divRecorrencia)
+				.setName("Repetir até")
+				.setDesc("Deixe em branco para repetir sem data final.")
+				.addText((text) => {
+					text.inputEl.type = "date";
+					if (this.recorrenciaDataFim) text.setValue(this.recorrenciaDataFim);
+					text.onChange((valor) => (this.recorrenciaDataFim = valor || null));
+				});
+		}
 
 		new Setting(this.divCamposComData)
 			.setName("Avisar com antecedência")

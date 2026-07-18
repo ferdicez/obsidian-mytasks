@@ -323,6 +323,19 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				})
 			);
 
+		new Setting(containerEl)
+			.setName("Recorrência")
+			.setDesc(
+				"Desligar remove o campo Recorrência (e Repetir até) do modal de editar tarefa, da nota criada por \"Nova tarefa\" e o ícone de recorrência no card — este grupo passa a se comportar como se recorrência não existisse."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.grupo.recorrenciaAtiva).onChange(async (valor) => {
+					this.grupo.recorrenciaAtiva = valor;
+					await this.plugin.salvarConfiguracoes();
+					this.display();
+				})
+			);
+
 		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
 		containerEl.createEl("h3", { text: "Status" });
 		new Setting(containerEl)
@@ -575,14 +588,16 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			(lista) => (this.grupo.templateNota.opcoesStatusVisiveis = lista)
 		);
 
-		containerEl.createEl("h3", { text: "Recorrência" });
-		this.renderizarOpcoesTemplateNota(
-			containerEl,
-			"Opções visíveis de Recorrência",
-			(Object.keys(RECORRENCIA_LABELS) as Recorrencia[]).map((chave) => ({ valor: chave, rotulo: RECORRENCIA_LABELS[chave] })),
-			() => this.grupo.templateNota.opcoesRecorrenciaVisiveis,
-			(lista) => (this.grupo.templateNota.opcoesRecorrenciaVisiveis = lista as Recorrencia[] | undefined)
-		);
+		if (this.grupo.recorrenciaAtiva) {
+			containerEl.createEl("h3", { text: "Recorrência" });
+			this.renderizarOpcoesTemplateNota(
+				containerEl,
+				"Opções visíveis de Recorrência",
+				(Object.keys(RECORRENCIA_LABELS) as Recorrencia[]).map((chave) => ({ valor: chave, rotulo: RECORRENCIA_LABELS[chave] })),
+				() => this.grupo.templateNota.opcoesRecorrenciaVisiveis,
+				(lista) => (this.grupo.templateNota.opcoesRecorrenciaVisiveis = lista as Recorrencia[] | undefined)
+			);
+		}
 
 		const propriedadesSelecao = [...this.grupo.propriedades]
 			.filter((p) => p.tipo === "selecao")
@@ -747,8 +762,11 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	// Mesmo padrão de "null = valores padrão" já usado em renderizarPropriedadesVisiveis, com outra fonte de
 	// itens — aqui o padrão exclui "Repetir até" (ver idsTemplateNotaVisiveisPorPadrao), não é "tudo".
 	private renderizarCamposTemplateNota(container: HTMLElement): void {
+		const camposFixos = this.grupo.recorrenciaAtiva
+			? CAMPOS_TEMPLATE_NOTA_FIXOS
+			: CAMPOS_TEMPLATE_NOTA_FIXOS.filter((c) => c.id !== "recorrencia" && c.id !== "repetir_ate");
 		const itens: { id: string; rotulo: string }[] = [
-			...CAMPOS_TEMPLATE_NOTA_FIXOS,
+			...camposFixos,
 			...[...this.grupo.propriedades].sort((a, b) => a.ordem - b.ordem).map((def) => ({ id: def.id, rotulo: def.rotulo })),
 		];
 		const padrao = idsTemplateNotaVisiveisPorPadrao(this.configEfetiva);

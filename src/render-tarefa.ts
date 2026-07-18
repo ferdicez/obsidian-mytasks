@@ -10,7 +10,6 @@ import {
 	ultimaOpcaoStatus,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
-import { ModalNovaTarefa } from "./modal-nova-tarefa";
 
 export function corComOpacidade(hex: string, alpha: number): string {
 	const valor = hex.replace("#", "");
@@ -130,15 +129,7 @@ export function desenharCartaoTarefa(
 	}
 	titulo.addEventListener("click", (evento) => {
 		evento.stopPropagation();
-		new ModalNovaTarefa(
-			app,
-			configuracoes,
-			repositorio,
-			() => {},
-			undefined,
-			tarefa,
-			() => aoAtualizar?.()
-		).open();
+		app.workspace.openLinkText(tarefa.caminho, "", false);
 	});
 
 	if (mostrarMeta) {
@@ -165,7 +156,7 @@ export function desenharCartaoTarefa(
 		info.createEl("span", { text: tarefa.horario, cls: "mytasks-meta" });
 	}
 
-	if (tarefa.recorrencia !== "nenhuma") {
+	if (configuracoes.recorrenciaAtiva && tarefa.recorrencia !== "nenhuma") {
 		const iconeRecorrencia = item.createSpan({ cls: "mytasks-icone-recorrencia" });
 		setIcon(iconeRecorrencia, "refresh-cw");
 	}

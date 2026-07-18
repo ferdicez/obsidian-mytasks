@@ -277,6 +277,9 @@ export interface ConfigEfetivaGrupo {
 	propriedades: PropriedadeDefinida[];
 	destaques: ConfigDestaques;
 	corAviso: string;
+	// Liga/desliga a funcionalidade de recorrência inteira pra este grupo — some do modal de editar
+	// tarefa, dos campos oferecidos pra nota (Configurações → Nota de tarefa) e do ícone no card.
+	recorrenciaAtiva: boolean;
 	calendarioMostrarDetalhes: boolean;
 	calendarioPropriedadesVisiveisPorModo: Record<ModoCalendario, string[] | null>;
 	kanbanPropriedadesVisiveis: string[] | null;
@@ -340,6 +343,7 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	propriedades: [],
 	destaques: {},
 	corAviso: "#e03131",
+	recorrenciaAtiva: true,
 	calendarioMostrarDetalhes: true,
 	calendarioPropriedadesVisiveisPorModo: {
 		mes: [],
@@ -564,7 +568,10 @@ export function obterFiltroSalvo(configuracoes: ConfigEfetivaGrupo, id: string):
 // Ids de todos os campos que podem aparecer na nota criada por "Nova tarefa": os 7 fixos + cada
 // propriedade customizada cadastrada no grupo.
 export function idsTemplateNotaDisponiveis(config: ConfigEfetivaGrupo): string[] {
-	return [...CAMPOS_TEMPLATE_NOTA_FIXOS.map((c) => c.id), ...config.propriedades.map((p) => p.id)];
+	const fixos = config.recorrenciaAtiva
+		? CAMPOS_TEMPLATE_NOTA_FIXOS
+		: CAMPOS_TEMPLATE_NOTA_FIXOS.filter((c) => c.id !== "recorrencia" && c.id !== "repetir_ate");
+	return [...fixos.map((c) => c.id), ...config.propriedades.map((p) => p.id)];
 }
 
 // "Repetir até" só faz sentido com uma Recorrência definida, mas o Meta Bind não tem como esconder um
@@ -579,6 +586,7 @@ export function idsTemplateNotaVisiveisPorPadrao(config: ConfigEfetivaGrupo): st
 }
 
 export function campoVisivelNaNota(config: ConfigEfetivaGrupo, campoId: string): boolean {
+	if (!config.recorrenciaAtiva && (campoId === "recorrencia" || campoId === "repetir_ate")) return false;
 	const lista = config.templateNota.camposVisiveis;
 	if (lista === null) return idsTemplateNotaVisiveisPorPadrao(config).includes(campoId);
 	return lista.includes(campoId);
