@@ -157,6 +157,18 @@ export function listarCamposMetaBind(
 			inline: true,
 		});
 	}
+	if (campoVisivelNaNota(config, "concluir_botao")) {
+		// Roda o comando "Concluir tarefa atual" (main.ts) em vez de escrever o status direto no
+		// frontmatter — assim o clique passa pela mesma lógica de recorrência/histórico/Concluídas que
+		// o Kanban e a Lista já usam, ao invés de só trocar o valor cru da propriedade de status.
+		campos.push({
+			id: "concluir_botao",
+			rotulo: "Concluir tarefa",
+			codigo:
+				'```meta-bind-button\nlabel: "Concluir"\nicon: check\nstyle: primary\naction:\n  type: command\n  command: my-tasks:concluir-tarefa-atual\n```',
+			inline: false,
+		});
+	}
 
 	for (const def of [...config.propriedades].sort((a, b) => a.ordem - b.ordem)) {
 		if (!campoVisivelNaNota(config, def.id)) continue;

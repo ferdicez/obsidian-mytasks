@@ -329,6 +329,17 @@ export class RepositorioTarefas {
 		});
 	}
 
+	// Usada pelo comando "Concluir tarefa atual" (o botão Meta Bind colado na própria nota, ver
+	// meta-bind-tarefa.ts) — reaproveita atualizarStatus (recorrência, mover pra Concluídas, apagar
+	// se não guarda histórico) em vez de só escrever o status no frontmatter, que perderia esses efeitos.
+	async concluirTarefaAtual(arquivo: TFile): Promise<void> {
+		const tarefa = await this.lerTarefaDoDisco(arquivo);
+		if (!tarefa) return;
+		const concluido = ultimaOpcaoStatus(this.obterConfiguracoes().status);
+		if (!concluido) return;
+		await this.atualizarStatus(tarefa, concluido);
+	}
+
 	async atualizarStatus(tarefaRecebida: Tarefa, novoStatus: string): Promise<void> {
 		const arquivo = this.app.vault.getAbstractFileByPath(tarefaRecebida.caminho);
 		if (!(arquivo instanceof TFile)) return;

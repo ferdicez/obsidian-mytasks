@@ -46,6 +46,17 @@ export default class MyTasksPlugin extends Plugin {
 		return this.configuracoes.grupos[0];
 	}
 
+	// A qual grupo um arquivo pertence (primeiro grupo pra cuja pasta/filtro ele é relevante), ou null se
+	// nenhum. Usada pelo comando "Concluir tarefa atual" pra descobrir a config efetiva certa (chaves,
+	// opções de status) a partir do arquivo aberto, sem ele precisar saber de qual grupo é.
+	grupoDoArquivo(caminho: string): GrupoTarefas | null {
+		for (const grupo of this.configuracoes.grupos) {
+			const config = configDoGrupo(this.configuracoes, grupo);
+			if (arquivoEhTarefaRelevante(config, caminho)) return grupo;
+		}
+		return null;
+	}
+
 	// Renomeia a chave do discriminador de grupo (propriedadeGrupo, campo global) no frontmatter — diferente
 	// de RepositorioTarefas.renomearChaveFrontmatter (escopado a UM grupo), essa chave atravessa TODOS os
 	// grupos, então soma os arquivos relevantes de cada um (deduplicados por caminho, já que um arquivo não
@@ -137,6 +148,21 @@ export default class MyTasksPlugin extends Plugin {
 			id: "abrir-kanban-tarefas-aba",
 			name: "Abrir Kanban de tarefas (tela cheia)",
 			callback: () => this.ativarVistaKanbanAba(),
+		});
+
+		// Alvo do botão Meta Bind "Concluir tarefa" colado na nota (ver meta-bind-tarefa.ts) — só fica
+		// disponível com uma tarefa aberta, daí o checkCallback em vez de callback fixo.
+		this.addCommand({
+			id: "concluir-tarefa-atual",
+			name: "Concluir tarefa atual",
+			checkCallback: (checking) => {
+				const arquivo = this.app.workspace.getActiveFile();
+				if (!arquivo) return false;
+				const grupo = this.grupoDoArquivo(arquivo.path);
+				if (!grupo) return false;
+				if (!checking) this.repositorioDoGrupo(grupo.id).concluirTarefaAtual(arquivo);
+				return true;
+			},
 		});
 
 		this.addSettingTab(new AbaConfiguracoes(this.app, this));

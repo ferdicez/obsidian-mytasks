@@ -241,6 +241,7 @@ export const CAMPOS_TEMPLATE_NOTA_FIXOS: CampoTemplateFixo[] = [
 	{ id: "recorrencia", rotulo: "Recorrência" },
 	{ id: "repetir_ate", rotulo: "Repetir até" },
 	{ id: "antecedencia", rotulo: "Avisar com antecedência" },
+	{ id: "concluir_botao", rotulo: "Botão: Concluir tarefa" },
 ];
 
 // Configuração de quais campos (e, nos de opção fixa, quais opções) geram código Meta Bind pra "Nova
