@@ -1,7 +1,16 @@
 import { App, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfigEfetivaGrupo, ConfiguracoesGestorTarefas, ID_STATUS, Tarefa, TipoAgrupamento, obterFiltroSalvo } from "./tipos";
+import {
+	ConfigEfetivaGrupo,
+	ConfiguracoesGestorTarefas,
+	GrupoFiltro,
+	ID_STATUS,
+	Tarefa,
+	TipoAgrupamento,
+	clonarGrupoFiltro,
+	grupoFiltroVazio,
+	obterFiltroSalvo,
+} from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
-import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA } from "./render-tarefa";
 import { agruparTarefas } from "./motor-agrupamento";
 import { compilarFiltro } from "./motor-filtro";
@@ -32,7 +41,7 @@ export interface OpcoesMotorKanban {
 
 export class MotorKanban {
 	private agrupamento: TipoAgrupamento;
-	private condicoesFiltro: CondicaoFiltro[] = [];
+	private grupoFiltro: GrupoFiltro = grupoFiltroVazio();
 	private filtroSalvoId: string | null = null;
 	private areaGrade: HTMLElement | null = null;
 
@@ -42,7 +51,7 @@ export class MotorKanban {
 		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
 		if (filtroInicial) {
 			this.filtroSalvoId = filtroInicial.id;
-			this.condicoesFiltro = filtroInicial.condicoes.map((c) => ({ ...c, valores: [...c.valores] }));
+			this.grupoFiltro = clonarGrupoFiltro(filtroInicial.raiz);
 		}
 	}
 
@@ -59,7 +68,7 @@ export class MotorKanban {
 
 	private tarefasFiltradas(): Tarefa[] {
 		const todas = this.opcoes.repositorio.listarTarefas();
-		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+		const filtroInterativo = compilarFiltro(this.grupoFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
 		return todas.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true)).filter(filtroInterativo);
 	}
 
@@ -180,9 +189,9 @@ export class MotorKanban {
 				configuracoes: this.opcoes.configuracoes,
 				filtroAtualId: this.filtroSalvoId,
 				restringirAIds: this.opcoes.filtrosExtrasIds,
-				aoEscolher: (filtroId, condicoes) => {
+				aoEscolher: (filtroId, raiz) => {
 					this.filtroSalvoId = filtroId;
-					this.condicoesFiltro = condicoes;
+					this.grupoFiltro = raiz;
 					this.renderizarGrade();
 				},
 			});
@@ -192,11 +201,10 @@ export class MotorKanban {
 		const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
 		setIcon(iconeNova, "square-plus");
 		botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
-		botaoNova.addEventListener("click", () => {
-			new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
-				await this.opcoes.repositorio.criarTarefa(titulo, dados);
-				this.renderizar();
-			}).open();
+		botaoNova.addEventListener("click", async () => {
+			const arquivo = await this.opcoes.repositorio.criarTarefaEmBranco();
+			this.renderizar();
+			this.opcoes.app.workspace.openLinkText(arquivo.path, "", false);
 		});
 	}
 }

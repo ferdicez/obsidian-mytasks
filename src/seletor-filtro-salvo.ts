@@ -1,10 +1,10 @@
 import { Menu, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfigEfetivaGrupo } from "./tipos";
+import { ConfigEfetivaGrupo, GrupoFiltro, clonarGrupoFiltro, grupoFiltroVazio } from "./tipos";
 
 export interface OpcoesSeletorFiltroSalvo {
 	configuracoes: ConfigEfetivaGrupo;
 	filtroAtualId: string | null;
-	aoEscolher: (filtroId: string | null, condicoes: CondicaoFiltro[]) => void;
+	aoEscolher: (filtroId: string | null, raiz: GrupoFiltro) => void;
 	// Restringe as opções do menu a estes IDs (ex: "filtro móvel" de uma visualização embutida). Sem isso, mostra todos os Filtros salvos.
 	restringirAIds?: string[];
 	// Elemento cuja borda esquerda define onde o menu abre (ex: o cabeçalho inteiro, pra descer sempre
@@ -48,7 +48,7 @@ export class SeletorFiltroSalvo {
 				.setChecked(this.filtroAtualId === null)
 				.onClick(() => {
 					this.filtroAtualId = null;
-					this.opcoes.aoEscolher(null, []);
+					this.opcoes.aoEscolher(null, grupoFiltroVazio());
 				})
 		);
 		for (const filtro of this.opcoesDisponiveis()) {
@@ -58,7 +58,7 @@ export class SeletorFiltroSalvo {
 					.setChecked(this.filtroAtualId === filtro.id)
 					.onClick(() => {
 						this.filtroAtualId = filtro.id;
-						this.opcoes.aoEscolher(filtro.id, filtro.condicoes.map((c) => ({ ...c, valores: [...c.valores] })));
+						this.opcoes.aoEscolher(filtro.id, clonarGrupoFiltro(filtro.raiz));
 					})
 			);
 		}

@@ -11,6 +11,7 @@ import {
 	ultimaOpcaoStatus,
 } from "./tipos";
 import { DadosTarefaEscrita, escreverFrontmatter, formatarLinkArquivo, lerFrontmatter } from "./frontmatter-tarefas";
+import { gerarCorpoMetaBind } from "./meta-bind-tarefa";
 
 function formatarData(data: Date): string {
 	const ano = data.getFullYear();
@@ -35,6 +36,39 @@ function proximaData(dataAtual: string, recorrencia: Recorrencia): string {
 
 function sanitizarNomeArquivo(titulo: string): string {
 	return titulo.replace(/[\\/:*?"<>|]/g, "-").trim();
+}
+
+// Tira o bloco de frontmatter do início do conteúdo de uma nota modelo (se ela tiver um) — só o corpo
+// interessa pra copiar pra dentro da tarefa nova, o frontmatter da própria tarefa já é gravado à parte.
+function removerFrontmatter(conteudo: string): string {
+	const match = conteudo.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+	return match ? conteudo.slice(match[0].length) : conteudo;
+}
+
+// Renomeia uma chave de frontmatter num conjunto de arquivos já resolvido — reaproveitado tanto pelo
+// rename de UM grupo (RepositorioTarefas.renomearChaveFrontmatter, escopado pela pasta do grupo) quanto
+// pelo rename do discriminador de grupo (MyTasksPlugin.renomearChavePropriedadeGrupo, que precisa somar os
+// arquivos de TODOS os grupos). Não sobrescreve um valor que já exista na chave nova (colisão silenciosa
+// vira "mantém o valor novo, descarta o antigo" em vez de perder dado por engano). Devolve quantos
+// arquivos tinham a chave antiga (não necessariamente quantos tiveram o valor efetivamente movido).
+export async function renomearChaveEmArquivos(app: App, arquivos: TFile[], chaveAntiga: string, chaveNova: string): Promise<number> {
+	if (chaveAntiga === chaveNova) return 0;
+
+	let migrados = 0;
+	for (const arquivo of arquivos) {
+		const cache = app.metadataCache.getFileCache(arquivo);
+		if (!cache?.frontmatter || !(chaveAntiga in cache.frontmatter)) continue;
+
+		await app.fileManager.processFrontMatter(arquivo, (fm) => {
+			if (!(chaveAntiga in fm)) return;
+			const valorExistenteNaChaveNova = fm[chaveNova];
+			const temValorNaChaveNova = valorExistenteNaChaveNova !== undefined && valorExistenteNaChaveNova !== null && valorExistenteNaChaveNova !== "";
+			if (!temValorNaChaveNova) fm[chaveNova] = fm[chaveAntiga];
+			delete fm[chaveAntiga];
+		});
+		migrados++;
+	}
+	return migrados;
 }
 
 export class RepositorioTarefas {
@@ -91,44 +125,50 @@ export class RepositorioTarefas {
 	}
 
 	private montarTarefa(arquivo: TFile, fm: Record<string, unknown>): Tarefa | null {
-		if (!fm.status) return null;
-
 		const config = this.obterConfiguracoes();
-		const { propriedades, dataTarefa } = config;
+		const { propriedades, dataTarefa, chavesFixas } = config;
+		const chaveStatus = config.status.chave || "status";
+		const valorStatus = fm[chaveStatus];
+		if (!valorStatus) return null;
+
 		const chaveData = dataTarefa.chave ?? "data";
 		const valorData = fm[chaveData];
 
 		const propriedadeGrupo = config.__propriedadeGrupo ?? null;
 		const valorGrupoBruto = propriedadeGrupo ? fm[propriedadeGrupo] : null;
 
+		const valorHorario = fm[chavesFixas.horario];
+		const valorAntecedencia = fm[chavesFixas.antecedencia];
+
 		return {
 			caminho: arquivo.path,
 			titulo: arquivo.basename,
-			status: fm.status as string,
+			status: valorStatus as string,
 			valorGrupo: typeof valorGrupoBruto === "string" ? valorGrupoBruto : null,
-			statusAnterior: typeof fm.status_anterior === "string" ? fm.status_anterior : null,
+			statusAnterior: typeof fm[chavesFixas.statusAnterior] === "string" ? (fm[chavesFixas.statusAnterior] as string) : null,
 			data: typeof valorData === "string" ? valorData : null,
 			dataEntrada:
-				typeof fm.entrada === "string"
-					? fm.entrada
+				typeof fm[chavesFixas.entrada] === "string"
+					? (fm[chavesFixas.entrada] as string)
 					: typeof fm.data_entrada === "string"
 						? fm.data_entrada
 						: formatarData(new Date(arquivo.stat.ctime)),
-			horario: typeof fm.horario === "string" && REGEX_HORARIO.test(fm.horario as string) ? (fm.horario as string) : null,
-			recorrencia: (fm.recorrencia ?? "nenhuma") as Recorrencia,
-			manterHistorico: (fm.manter_historico ?? fm.recorrencia_manter_historico ?? true) as boolean,
-			recorrenciaDataFim: (fm.recorrencia_data_fim as string) ?? null,
+			horario: typeof valorHorario === "string" && REGEX_HORARIO.test(valorHorario) ? valorHorario : null,
+			recorrencia: (fm[chavesFixas.recorrencia] ?? "nenhuma") as Recorrencia,
+			manterHistorico: (fm[chavesFixas.manterHistorico] ?? fm.recorrencia_manter_historico ?? true) as boolean,
+			recorrenciaDataFim: (fm[chavesFixas.recorrenciaDataFim] as string) ?? null,
 			diasAntecedenciaAviso:
-				typeof fm.antecedencia === "number"
-					? fm.antecedencia
+				typeof valorAntecedencia === "number"
+					? valorAntecedencia
 					: typeof fm.dias_antecedencia_aviso === "number"
 						? fm.dias_antecedencia_aviso
 						: null,
 			propriedades: lerFrontmatter(this.app, arquivo, fm, propriedades),
-			proximaOcorrenciaCaminho: typeof fm.proxima_ocorrencia === "string" ? fm.proxima_ocorrencia : null,
+			proximaOcorrenciaCaminho:
+				typeof fm[chavesFixas.proximaOcorrencia] === "string" ? (fm[chavesFixas.proximaOcorrencia] as string) : null,
 			nasceuDeOcorrenciaCaminho:
-				typeof fm.ocorrencia_anterior === "string"
-					? fm.ocorrencia_anterior
+				typeof fm[chavesFixas.ocorrenciaAnterior] === "string"
+					? (fm[chavesFixas.ocorrenciaAnterior] as string)
 					: typeof fm.veio_de_ocorrencia === "string"
 						? fm.veio_de_ocorrencia
 						: null,
@@ -171,7 +211,7 @@ export class RepositorioTarefas {
 
 		const arquivo = await this.app.vault.create(caminho, "");
 		const config = this.obterConfiguracoes();
-		const { propriedades, dataTarefa } = config;
+		const { propriedades, dataTarefa, chavesFixas } = config;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			// Ordem pedida pela Fernanda: 1) grupo, 2) entrada, 3) prazo, 4) propriedades customizadas
 			// (as duas últimas são gravadas dentro de escreverFrontmatter). A ordem de inserção das
@@ -179,8 +219,8 @@ export class RepositorioTarefas {
 			if (config.__propriedadeGrupo) {
 				fm[config.__propriedadeGrupo] = config.__valorGrupo ?? "";
 			}
-			fm.entrada = formatarData(new Date());
-			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
+			fm[chavesFixas.entrada] = formatarData(new Date());
+			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas);
 		});
 		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;
@@ -200,13 +240,55 @@ export class RepositorioTarefas {
 		});
 	}
 
+	// Cria uma tarefa com nome genérico (sem pedir título) e o corpo já preenchido — quem chama abre a nota
+	// em seguida (o clique em "Nova tarefa" deixou de abrir o modal de formulário). Status segue a mesma
+	// regra posicional de sempre: sem data cai no Inbox (1ª opção), com data cai na opção seguinte.
+	async criarTarefaEmBranco(valoresIniciais?: { data?: string | null; horario?: string | null }): Promise<TFile> {
+		const config = this.obterConfiguracoes();
+		const data = valoresIniciais?.data ?? null;
+		const horario = valoresIniciais?.horario ?? null;
+		const status = data ? opcaoStatusComData(config.status) ?? "" : primeiraOpcaoStatus(config.status) ?? "";
+
+		const arquivo = await this.criarTarefa("Nova tarefa", {
+			status,
+			data,
+			horario,
+			recorrencia: "nenhuma",
+			manterHistorico: true,
+			recorrenciaDataFim: null,
+			diasAntecedenciaAviso: null,
+			propriedades: {},
+		});
+
+		const corpo = await this.obterCorpoNovaTarefa(config);
+		if (corpo) await this.app.vault.append(arquivo, "\n" + corpo + "\n");
+
+		return arquivo;
+	}
+
+	// Se ela configurou uma "nota modelo" (Configurações → Nota de tarefa), copia o CORPO dessa nota (sem o
+	// frontmatter dela) — assim ela decide livremente o layout, colando os códigos Meta Bind onde quiser.
+	// Sem nota modelo (ou se a que estava configurada sumiu/foi movida), cai na geração automática de sempre.
+	private async obterCorpoNovaTarefa(config: ConfigEfetivaGrupo): Promise<string> {
+		const caminhoModelo = config.templateNota.notaModeloCaminho;
+		if (caminhoModelo) {
+			const arquivoModelo = this.app.vault.getAbstractFileByPath(caminhoModelo);
+			if (arquivoModelo instanceof TFile) {
+				const conteudo = await this.app.vault.read(arquivoModelo);
+				return removerFrontmatter(conteudo);
+			}
+		}
+		return gerarCorpoMetaBind(this.app, config, (propriedadeId) => this.valoresUsados(propriedadeId));
+	}
+
 	async atualizarTarefaCompleta(tarefa: Tarefa, dados: DadosTarefaEscrita): Promise<void> {
 		const arquivo = this.app.vault.getAbstractFileByPath(tarefa.caminho);
 		if (!(arquivo instanceof TFile)) return;
 
-		const { propriedades, dataTarefa } = this.obterConfiguracoes();
+		const config = this.obterConfiguracoes();
+		const { propriedades, dataTarefa, chavesFixas } = config;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data");
+			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas);
 		});
 	}
 
@@ -235,12 +317,14 @@ export class RepositorioTarefas {
 		const arquivo = this.app.vault.getAbstractFileByPath(tarefa.caminho);
 		if (!(arquivo instanceof TFile)) return;
 
-		const chaveData = this.obterConfiguracoes().dataTarefa.chave ?? "data";
+		const config = this.obterConfiguracoes();
+		const chaveData = config.dataTarefa.chave ?? "data";
+		const chaveHorario = config.chavesFixas.horario;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			fm[chaveData] = novaData;
 			if (novoHorario !== undefined) {
-				if (novoHorario) fm.horario = novoHorario;
-				else delete fm.horario;
+				if (novoHorario) fm[chaveHorario] = novoHorario;
+				else delete fm[chaveHorario];
 			}
 		});
 	}
@@ -253,7 +337,9 @@ export class RepositorioTarefas {
 		// estar obsoleto se a tela ainda não tiver re-renderizado desde a última escrita, ex: tarefa recém-criada).
 		const tarefa = (await this.lerTarefaDoDisco(arquivo)) ?? tarefaRecebida;
 
-		const { status, moverConcluidas } = this.obterConfiguracoes();
+		const config = this.obterConfiguracoes();
+		const { status, moverConcluidas, chavesFixas } = config;
+		const chaveStatus = config.status.chave || "status";
 		const concluido = ultimaOpcaoStatus(status);
 		const estaConcluindo = novoStatus === concluido;
 
@@ -265,7 +351,7 @@ export class RepositorioTarefas {
 				return;
 			}
 			await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-				fm.status = novoStatus;
+				fm[chaveStatus] = novoStatus;
 			});
 			return;
 		}
@@ -283,8 +369,8 @@ export class RepositorioTarefas {
 		}
 
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			fm.status_anterior = tarefa.status;
-			fm.status = novoStatus;
+			fm[chavesFixas.statusAnterior] = tarefa.status;
+			fm[chaveStatus] = novoStatus;
 		});
 
 		let caminhoFinal = arquivo.path;
@@ -298,7 +384,7 @@ export class RepositorioTarefas {
 				const proxima = await this.gerarProximaOcorrencia(tarefa, caminhoFinal);
 				if (proxima) {
 					await this.app.fileManager.processFrontMatter(arquivoAtualizado, (fm) => {
-						fm.proxima_ocorrencia = proxima.path;
+						fm[chavesFixas.proximaOcorrencia] = proxima.path;
 					});
 				}
 			}
@@ -343,10 +429,11 @@ export class RepositorioTarefas {
 			}
 		}
 
+		const configAtual = this.obterConfiguracoes();
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			fm.status = novoStatus;
-			delete fm.status_anterior;
-			delete fm.proxima_ocorrencia;
+			fm[configAtual.status.chave || "status"] = novoStatus;
+			delete fm[configAtual.chavesFixas.statusAnterior];
+			delete fm[configAtual.chavesFixas.proximaOcorrencia];
 		});
 
 		return arquivo;
@@ -357,17 +444,18 @@ export class RepositorioTarefas {
 		const novaData = proximaData(tarefa.data, tarefa.recorrencia);
 
 		if (tarefa.recorrenciaDataFim && novaData > tarefa.recorrenciaDataFim) {
-			const { status } = this.obterConfiguracoes();
+			const config = this.obterConfiguracoes();
 			await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-				fm.status = ultimaOpcaoStatus(status);
+				fm[config.status.chave || "status"] = ultimaOpcaoStatus(config.status);
 			});
 			return;
 		}
 
-		const { status, dataTarefa } = this.obterConfiguracoes();
+		const config = this.obterConfiguracoes();
+		const { status, dataTarefa } = config;
 		const chaveData = dataTarefa.chave ?? "data";
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			fm.status = opcaoStatusComData(status) ?? tarefa.status;
+			fm[config.status.chave || "status"] = opcaoStatusComData(status) ?? tarefa.status;
 			fm[chaveData] = novaData;
 		});
 	}
@@ -408,7 +496,7 @@ export class RepositorioTarefas {
 			propriedades: tarefa.propriedades,
 		});
 		await this.app.fileManager.processFrontMatter(arquivoNovo, (fm) => {
-			fm.ocorrencia_anterior = caminhoOrigem;
+			fm[this.obterConfiguracoes().chavesFixas.ocorrenciaAnterior] = caminhoOrigem;
 		});
 		return arquivoNovo;
 	}
@@ -436,29 +524,14 @@ export class RepositorioTarefas {
 	}
 
 	// Renomeia a CHAVE de uma propriedade no frontmatter de todas as tarefas do grupo (não só o rótulo
-	// exibido no plugin). Usado quando a usuária muda o "id"/chave técnica de uma propriedade em
-	// Configurações — sem isso, o plugin continuaria lendo/escrevendo a chave antiga, que já não existe
-	// mais no arquivo, e a tarefa pareceria ter perdido o valor (bug relatado com a propriedade "referência").
-	async renomearChavePropriedade(idAntigo: string, idNovo: string): Promise<number> {
-		if (idAntigo === idNovo) return 0;
+	// exibido no plugin). Usado quando a usuária muda o "id"/chave técnica de uma propriedade, ou a chave
+	// de qualquer campo fixo (status, data, horário, recorrência...) em Configurações — sem isso, o plugin
+	// continuaria lendo/escrevendo a chave antiga, que já não existe mais no arquivo, e a tarefa pareceria
+	// ter perdido o valor (bug relatado originalmente com a propriedade "referência").
+	async renomearChaveFrontmatter(chaveAntiga: string, chaveNova: string): Promise<number> {
 		const configuracoes = this.obterConfiguracoes();
 		const arquivos = this.app.vault.getMarkdownFiles().filter((f) => arquivoEhTarefaRelevante(configuracoes, f.path));
-
-		let migrados = 0;
-		for (const arquivo of arquivos) {
-			const cache = this.app.metadataCache.getFileCache(arquivo);
-			if (!cache?.frontmatter || !(idAntigo in cache.frontmatter)) continue;
-
-			await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-				if (!(idAntigo in fm)) return;
-				const valorExistenteNaChaveNova = fm[idNovo];
-				const temValorNaChaveNova = valorExistenteNaChaveNova !== undefined && valorExistenteNaChaveNova !== null && valorExistenteNaChaveNova !== "";
-				if (!temValorNaChaveNova) fm[idNovo] = fm[idAntigo];
-				delete fm[idAntigo];
-			});
-			migrados++;
-		}
-		return migrados;
+		return renomearChaveEmArquivos(this.app, arquivos, chaveAntiga, chaveNova);
 	}
 
 	async excluirTarefa(tarefa: Tarefa): Promise<void> {
@@ -468,42 +541,27 @@ export class RepositorioTarefas {
 		}
 	}
 
-	async migrarChaveData(chaveAntiga: string, chaveNova: string): Promise<void> {
-		if (chaveAntiga === chaveNova) return;
-
-		const caminhoPasta = normalizePath(this.obterConfiguracoes().pastaTarefas);
-		const arquivos = this.app.vault
-			.getMarkdownFiles()
-			.filter((f) => f.path.startsWith(caminhoPasta + "/") || f.parent?.path === caminhoPasta);
-
-		for (const arquivo of arquivos) {
-			const fm = this.app.metadataCache.getFileCache(arquivo)?.frontmatter;
-			const valorAntigo = fm?.[chaveAntiga];
-			if (typeof valorAntigo !== "string") continue;
-
-			await this.app.fileManager.processFrontMatter(arquivo, (frontmatter) => {
-				frontmatter[chaveNova] = valorAntigo;
-				delete frontmatter[chaveAntiga];
-			});
-		}
+	async migrarChaveData(chaveAntiga: string, chaveNova: string): Promise<number> {
+		return this.renomearChaveFrontmatter(chaveAntiga, chaveNova);
 	}
 
 	async migrarValoresStatus(mapaAntigoParaNovo: Map<string, string>): Promise<void> {
-		const caminhoPasta = normalizePath(this.obterConfiguracoes().pastaTarefas);
-		const arquivos = this.app.vault
-			.getMarkdownFiles()
-			.filter((f) => f.path.startsWith(caminhoPasta + "/") || f.parent?.path === caminhoPasta);
+		const config = this.obterConfiguracoes();
+		const chaveStatus = config.status.chave || "status";
+		// arquivoEhTarefaRelevante (não só a pasta de ativas) — uma tarefa já concluída também pode ter um
+		// valor de status antigo (ex: antes de ser movida) e precisa ser migrada junto.
+		const arquivos = this.app.vault.getMarkdownFiles().filter((f) => arquivoEhTarefaRelevante(config, f.path));
 
 		for (const arquivo of arquivos) {
 			const fm = this.app.metadataCache.getFileCache(arquivo)?.frontmatter;
-			const statusAtual = fm?.status as string | undefined;
+			const statusAtual = fm?.[chaveStatus] as string | undefined;
 			if (!statusAtual) continue;
 
 			const novoStatus = mapaAntigoParaNovo.get(statusAtual);
 			if (!novoStatus || novoStatus === statusAtual) continue;
 
 			await this.app.fileManager.processFrontMatter(arquivo, (frontmatter) => {
-				frontmatter.status = novoStatus;
+				frontmatter[chaveStatus] = novoStatus;
 			});
 		}
 	}

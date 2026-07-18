@@ -1,11 +1,12 @@
 import { App, parseYaml } from "obsidian";
-import { ConfigEfetivaGrupo, ID_STATUS, Tarefa, TipoAgrupamento, obterVisualizacao } from "./tipos";
-import { compilarFiltro, condicoesDeFiltroYaml } from "./motor-filtro";
+import { ConfigEfetivaGrupo, ID_STATUS, Tarefa, TipoAgrupamento, grupoFiltroVazio, obterVisualizacao } from "./tipos";
+import { compilarFiltro, grupoFiltroDeYaml } from "./motor-filtro";
 
 interface ConfigBlocoLista {
 	view?: string;
 	"agrupar-por"?: string;
-	filtro?: Record<string, string>;
+	// Formato plano ({propriedade: valor}) ou grupos aninhados e:/ou:/nao: — ver grupoFiltroDeYaml.
+	filtro?: unknown;
 }
 
 export interface BlocoListaCompilado {
@@ -42,13 +43,11 @@ export function compilarBlocoLista(
 		config["agrupar-por"] ?? viewSalva?.agrupamento,
 		configuracoes
 	);
-	const condicoes = config.filtro
-		? condicoesDeFiltroYaml(config.filtro)
-		: viewSalva?.condicoes ?? [];
+	const raiz = config.filtro ? grupoFiltroDeYaml(config.filtro) : viewSalva?.raiz ?? grupoFiltroVazio();
 
 	return {
 		agrupamento,
-		filtro: compilarFiltro(condicoes, app, sourcePath, configuracoes),
+		filtro: compilarFiltro(raiz, app, sourcePath, configuracoes),
 		filtrosExtrasIds: config.filtro ? [] : viewSalva?.filtrosExtrasIds ?? [],
 		filtroExtraPadraoId: config.filtro ? null : viewSalva?.filtroExtraPadraoId ?? null,
 	};

@@ -1,6 +1,7 @@
-import { App, PluginSettingTab, Setting, setIcon } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type MyTasksPlugin from "./main";
 import {
+	CAMPOS_TEMPLATE_NOTA_FIXOS,
 	ConfigEfetivaGrupo,
 	EspessuraCheckbox,
 	EstiloDestaque,
@@ -11,13 +12,19 @@ import {
 	ModoCalendario,
 	OpcaoSelecao,
 	PropriedadeDefinida,
+	RECORRENCIA_LABELS,
 	ROTULOS_ESPESSURA,
 	ROTULOS_ESTILO_DESTAQUE,
 	ROTULOS_MODO,
+	Recorrencia,
 	TipoAgrupamento,
 	VisualizacaoSalva,
+	campoVisivelNaNota,
+	clonarGrupoFiltro,
 	configDoGrupo,
+	contarCondicoes,
 	grupoAtivoOuPrimeiro,
+	idsTemplateNotaVisiveisPorPadrao,
 	migrarReferenciasPropriedade,
 	normalizarChave,
 } from "./tipos";
@@ -29,15 +36,19 @@ import { ModalEditarFiltroSalvo } from "./modal-editar-filtro-salvo";
 import { opcoesDeAgrupamento, rotuloAgrupamento } from "./seletor-agrupamento";
 import { contarReferenciasView } from "./localizador-referencias";
 import { ID_DATA_ENTRADA } from "./render-tarefa";
+import { SugestorArquivos } from "./sugestor-arquivos";
+import { CampoMetaBind, codigoParaColar, listarCamposMetaBind } from "./meta-bind-tarefa";
 
-type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "filtros";
+type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "nota" | "filtros" | "avancado";
 
 const PAGINAS: { id: PaginaConfig; rotulo: string }[] = [
 	{ id: "geral", rotulo: "Geral" },
 	{ id: "calendario", rotulo: "Calendário" },
 	{ id: "kanban", rotulo: "Kanban" },
 	{ id: "tarefas", rotulo: "Tarefas" },
+	{ id: "nota", rotulo: "Nota de tarefa" },
 	{ id: "filtros", rotulo: "Filtros" },
+	{ id: "avancado", rotulo: "Avançado" },
 ];
 
 const MODOS_CALENDARIO: ModoCalendario[] = ["mes", "semana-horarios", "semana-kanban", "ano"];
@@ -91,6 +102,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		else if (this.paginaAtual === "calendario") this.renderizarPaginaCalendario(corpo);
 		else if (this.paginaAtual === "kanban") this.renderizarPaginaKanban(corpo);
 		else if (this.paginaAtual === "tarefas") this.renderizarPaginaTarefas(corpo);
+		else if (this.paginaAtual === "nota") this.renderizarPaginaNota(corpo);
+		else if (this.paginaAtual === "avancado") this.renderizarPaginaAvancado(corpo);
 		else this.renderizarPaginaFiltros(corpo);
 	}
 
@@ -105,18 +118,37 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Propriedade que define o grupo")
 			.setDesc(
-				"Chave de frontmatter usada para separar os grupos (ex: grupo). Deixe em branco para usar um só grupo. Trocar depois exige repreencher essa propriedade nas notas."
+				"Chave de frontmatter usada para separar os grupos (ex: grupo). Deixe em branco para usar um só grupo. Renomear um valor já configurado reescreve automaticamente as tarefas existentes."
 			)
-			.addText((text) =>
-				text
-					.setPlaceholder("grupo")
-					.setValue(this.plugin.configuracoes.propriedadeGrupo ?? "")
-					.onChange(async (valor) => {
-						const limpo = valor.trim();
-						this.plugin.configuracoes.propriedadeGrupo = limpo ? normalizarChave(limpo) : null;
-						await this.plugin.salvarConfiguracoes();
-					})
-			);
+			.addText((text) => {
+				text.setPlaceholder("grupo").setValue(this.plugin.configuracoes.propriedadeGrupo ?? "");
+				text.inputEl.addEventListener("blur", async () => {
+					const chaveAntiga = this.plugin.configuracoes.propriedadeGrupo;
+					const valorDigitado = text.inputEl.value.trim();
+					const chaveNova = valorDigitado ? normalizarChave(valorDigitado) : null;
+					if (chaveNova === chaveAntiga) {
+						text.setValue(chaveAntiga ?? "");
+						return;
+					}
+
+					// Só existe algo pra migrar quando estava configurada e continua configurada (renomear de
+					// verdade) — nascer/zerar a propriedade não mexe em frontmatter nenhum, não pede confirmação.
+					if (chaveAntiga && chaveNova) {
+						const confirmado = confirm(
+							`Renomear a chave "${chaveAntiga}" para "${chaveNova}"? Isso reescreve o frontmatter de todas as tarefas existentes que usam essa chave.`
+						);
+						if (!confirmado) {
+							text.setValue(chaveAntiga);
+							return;
+						}
+						const migrados = await this.plugin.renomearChavePropriedadeGrupo(chaveAntiga, chaveNova);
+						new Notice(`Chave renomeada em ${migrados} tarefa(s).`);
+					}
+
+					this.plugin.configuracoes.propriedadeGrupo = chaveNova;
+					await this.plugin.salvarConfiguracoes();
+				});
+			});
 
 		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
 
@@ -332,21 +364,38 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			.setDesc(
 				"É a data de vencimento (prazo) da tarefa — a mesma usada no calendário. Renomear aqui também renomeia a propriedade nas notas já criadas, automaticamente."
 			)
-			.addText((text) =>
-				text.setValue(this.grupo.dataTarefa.rotulo).onChange(async (valor) => {
-					const novoRotulo = valor.trim() || "Data";
+			.addText((text) => {
+				const rotuloOriginal = this.grupo.dataTarefa.rotulo;
+				text.setValue(rotuloOriginal);
+				// Dispara no BLUR (não a cada tecla) e pede confirmação antes de migrar — mesmo padrão dos
+				// demais campos fixos (ver renderizarCampoChaveFixa), já que aqui a chave deriva do rótulo.
+				text.inputEl.addEventListener("blur", async () => {
+					const novoRotulo = text.inputEl.value.trim() || "Data";
 					const chaveAntiga = this.grupo.dataTarefa.chave ?? "data";
 					const chaveNova = normalizarChave(novoRotulo);
+
+					if (chaveNova === chaveAntiga) {
+						this.grupo.dataTarefa.rotulo = novoRotulo;
+						text.setValue(novoRotulo);
+						await this.plugin.salvarConfiguracoes();
+						return;
+					}
+
+					const confirmado = confirm(
+						`Renomear a chave "${chaveAntiga}" para "${chaveNova}"? Isso reescreve o frontmatter de todas as tarefas existentes que usam essa chave.`
+					);
+					if (!confirmado) {
+						text.setValue(rotuloOriginal);
+						return;
+					}
 
 					this.grupo.dataTarefa.rotulo = novoRotulo;
 					this.grupo.dataTarefa.chave = chaveNova;
 					await this.plugin.salvarConfiguracoes();
-
-					if (chaveNova !== chaveAntiga) {
-						await this.plugin.repositorioDoGrupo(this.grupo.id).migrarChaveData(chaveAntiga, chaveNova);
-					}
-				})
-			);
+					const migrados = await this.plugin.repositorioDoGrupo(this.grupo.id).migrarChaveData(chaveAntiga, chaveNova);
+					new Notice(`Chave renomeada em ${migrados} tarefa(s).`);
+				});
+			});
 
 		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
 		containerEl.createEl("h3", { text: "Propriedades customizadas" });
@@ -496,6 +545,264 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		);
 	}
 
+	// Controla o que aparece na nota criada por "Nova tarefa" (Kanban/Lista/Calendário deixaram de abrir o
+	// modal de formulário). Sem nota modelo configurada, o corpo é gerado automaticamente com os campos
+	// visíveis abaixo. Com nota modelo, o corpo dessa nota é copiado como está — os campos abaixo só servem
+	// pra gerar os códigos prontos pra colar nela (a lista "Códigos para colar" no fim da página).
+	private renderizarPaginaNota(containerEl: HTMLElement): void {
+		containerEl.createEl("p", {
+			text: 'Controla o que aparece na nota criada ao clicar em "Nova tarefa" (Kanban, Lista e Calendário) — a nota abre direto, sem formulário.',
+			cls: "setting-item-description",
+		});
+
+		this.renderizarNotaModelo(containerEl);
+
+		containerEl.createEl("h3", { text: "Campos" });
+		containerEl.createEl("p", {
+			text: this.grupo.templateNota.notaModeloCaminho
+				? "Sem efeito na nota modelo em si (que é copiada como está) — controla só quais códigos aparecem pra copiar mais abaixo."
+				: 'Escolha quais campos entram no corpo gerado automaticamente (sem nota modelo configurada acima).',
+			cls: "setting-item-description",
+		});
+		this.renderizarCamposTemplateNota(containerEl);
+
+		containerEl.createEl("h3", { text: this.grupo.status.rotulo });
+		this.renderizarOpcoesTemplateNota(
+			containerEl,
+			`Opções visíveis de ${this.grupo.status.rotulo}`,
+			this.grupo.status.opcoes.map((o) => ({ valor: o.valor, rotulo: o.valor })),
+			() => this.grupo.templateNota.opcoesStatusVisiveis,
+			(lista) => (this.grupo.templateNota.opcoesStatusVisiveis = lista)
+		);
+
+		containerEl.createEl("h3", { text: "Recorrência" });
+		this.renderizarOpcoesTemplateNota(
+			containerEl,
+			"Opções visíveis de Recorrência",
+			(Object.keys(RECORRENCIA_LABELS) as Recorrencia[]).map((chave) => ({ valor: chave, rotulo: RECORRENCIA_LABELS[chave] })),
+			() => this.grupo.templateNota.opcoesRecorrenciaVisiveis,
+			(lista) => (this.grupo.templateNota.opcoesRecorrenciaVisiveis = lista as Recorrencia[] | undefined)
+		);
+
+		const propriedadesSelecao = [...this.grupo.propriedades]
+			.filter((p) => p.tipo === "selecao")
+			.sort((a, b) => a.ordem - b.ordem);
+		for (const def of propriedadesSelecao) {
+			containerEl.createEl("h3", { text: def.rotulo });
+			this.renderizarOpcoesTemplateNota(
+				containerEl,
+				`Opções visíveis de ${def.rotulo}`,
+				(def.opcoes ?? []).map((o) => ({ valor: o.valor, rotulo: o.valor })),
+				() => this.grupo.templateNota.opcoesPropriedadeVisiveis?.[def.id],
+				(lista) => {
+					const atual = this.grupo.templateNota.opcoesPropriedadeVisiveis ?? {};
+					if (lista === undefined) delete atual[def.id];
+					else atual[def.id] = lista;
+					this.grupo.templateNota.opcoesPropriedadeVisiveis = atual;
+				}
+			);
+		}
+
+		containerEl.createEl("h3", { text: "Códigos para colar" });
+		containerEl.createEl("p", {
+			text: 'Um código Meta Bind por campo visível acima — copie e cole onde quiser dentro da sua nota modelo (ou de qualquer nota). Muda ao vivo conforme você liga/desliga campos e opções nesta página.',
+			cls: "setting-item-description",
+		});
+		this.renderizarCodigosMetaBind(containerEl);
+	}
+
+	// Campo de busca (mesmo autocomplete usado pra "link de arquivo" livre no modal de tarefa) pra escolher
+	// uma nota qualquer do vault como modelo — "Nova tarefa" passa a copiar o CORPO dela, ao invés de gerar
+	// o corpo automaticamente.
+	private renderizarNotaModelo(container: HTMLElement): void {
+		const setting = new Setting(container)
+			.setName("Nota modelo")
+			.setDesc(
+				'Escolha uma nota do vault pra servir de modelo: "Nova tarefa" copia o corpo dela pra dentro da tarefa nova (o frontmatter da nota modelo é ignorado). Deixe em branco pra usar a geração automática com os campos abaixo.'
+			);
+
+		setting.addSearch((search) => {
+			const caminhoAtual = this.grupo.templateNota.notaModeloCaminho;
+			if (caminhoAtual) {
+				const arquivoAtual = this.app.vault.getAbstractFileByPath(caminhoAtual);
+				search.setValue(arquivoAtual?.name.replace(/\.md$/, "") ?? caminhoAtual);
+			}
+			new SugestorArquivos(this.app, search.inputEl, async (arquivo) => {
+				this.grupo.templateNota.notaModeloCaminho = arquivo.path;
+				await this.plugin.salvarConfiguracoes();
+				this.display();
+			});
+			search.inputEl.addEventListener("input", async () => {
+				if (search.inputEl.value) return;
+				this.grupo.templateNota.notaModeloCaminho = null;
+				await this.plugin.salvarConfiguracoes();
+				this.display();
+			});
+		});
+	}
+
+	// Lista os códigos Meta Bind prontos pra copiar — um bloco por campo visível, mesmo padrão visual já
+	// usado no "Código para embutir na nota" do modal de Visualização salva (barra com rótulo + Copiar).
+	private renderizarCodigosMetaBind(container: HTMLElement): void {
+		const repositorio = this.plugin.repositorioDoGrupo(this.grupo.id);
+		const campos: CampoMetaBind[] = listarCamposMetaBind(this.app, this.configEfetiva, (propriedadeId) =>
+			repositorio.valoresUsados(propriedadeId)
+		);
+
+		if (campos.length === 0) {
+			container.createEl("p", { text: "Nenhum campo visível — ligue algum campo acima.", cls: "setting-item-description" });
+			return;
+		}
+
+		for (const campo of campos) {
+			const bloco = container.createDiv({ cls: "mytasks-embed-bloco" });
+			const barra = bloco.createDiv({ cls: "mytasks-embed-barra" });
+			barra.createSpan({ text: campo.rotulo, cls: "mytasks-embed-rotulo" });
+			const botaoCopiar = barra.createEl("button", { text: "Copiar", cls: "mytasks-embed-copiar" });
+			const texto = codigoParaColar(campo);
+			botaoCopiar.addEventListener("click", async () => {
+				await navigator.clipboard.writeText(texto);
+				botaoCopiar.setText("Copiado!");
+				setTimeout(() => botaoCopiar.setText("Copiar"), 1500);
+			});
+			bloco.createEl("pre", { cls: "mytasks-embed-codigo", text: texto });
+		}
+	}
+
+	// Chaves técnicas (frontmatter) dos campos fixos do plugin — renomear aqui reescreve automaticamente
+	// as tarefas já existentes que usam a chave antiga (RepositorioTarefas.renomearChaveFrontmatter).
+	private renderizarPaginaAvancado(containerEl: HTMLElement): void {
+		containerEl.createEl("p", {
+			text: "Nome técnico (chave no frontmatter) de cada campo fixo do plugin. Renomear aqui reescreve automaticamente todas as tarefas já criadas que usam a chave antiga — nada se perde, mas é uma operação em massa, então ela pede confirmação antes.",
+			cls: "setting-item-description",
+		});
+
+		this.renderizarCampoChaveFixa(
+			containerEl,
+			`Chave de "${this.grupo.status.rotulo || "Status"}"`,
+			() => this.grupo.status.chave || "status",
+			(chave) => (this.grupo.status.chave = chave)
+		);
+
+		const camposChavesFixas: { titulo: string; chave: keyof GrupoTarefas["chavesFixas"] }[] = [
+			{ titulo: "Horário", chave: "horario" },
+			{ titulo: "Recorrência", chave: "recorrencia" },
+			{ titulo: "Repetir até", chave: "recorrenciaDataFim" },
+			{ titulo: "Avisar com antecedência", chave: "antecedencia" },
+			{ titulo: "Manter registro ao concluir", chave: "manterHistorico" },
+			{ titulo: "Data de entrada", chave: "entrada" },
+			{ titulo: "Status anterior (uso interno — recorrência)", chave: "statusAnterior" },
+			{ titulo: "Ocorrência anterior (uso interno — recorrência)", chave: "ocorrenciaAnterior" },
+			{ titulo: "Próxima ocorrência (uso interno — recorrência)", chave: "proximaOcorrencia" },
+		];
+		for (const campo of camposChavesFixas) {
+			this.renderizarCampoChaveFixa(
+				containerEl,
+				`Chave de "${campo.titulo}"`,
+				() => this.grupo.chavesFixas[campo.chave],
+				(chave) => (this.grupo.chavesFixas[campo.chave] = chave)
+			);
+		}
+	}
+
+	// Campo de texto de uma chave técnica renomeável, com migração automática no vault. Dispara no BLUR
+	// (não a cada tecla, diferente do campo antigo de "Nome do campo" da Data) — evita reescrever o vault
+	// dezenas de vezes durante a digitação — e pede confirmação antes, mesmo padrão já usado no rename de
+	// propriedade customizada (ModalEditarPropriedade). `migrar` é opcional: por padrão usa o repositório
+	// do grupo atual; o discriminador de grupo passa uma versão que cobre todos os grupos.
+	private renderizarCampoChaveFixa(
+		container: HTMLElement,
+		titulo: string,
+		obterAtual: () => string,
+		definir: (chave: string) => void,
+		migrar?: (chaveAntiga: string, chaveNova: string) => Promise<number>
+	): void {
+		new Setting(container).setName(titulo).addText((text) => {
+			text.setValue(obterAtual());
+			text.inputEl.addEventListener("blur", async () => {
+				const chaveAntiga = obterAtual();
+				const chaveNova = normalizarChave(text.inputEl.value);
+				if (!chaveNova || chaveNova === chaveAntiga) {
+					text.setValue(chaveAntiga);
+					return;
+				}
+				const confirmado = confirm(
+					`Renomear a chave "${chaveAntiga}" para "${chaveNova}"? Isso reescreve o frontmatter de todas as tarefas existentes que usam essa chave.`
+				);
+				if (!confirmado) {
+					text.setValue(chaveAntiga);
+					return;
+				}
+				const migrarFn =
+					migrar ?? ((antiga: string, nova: string) => this.plugin.repositorioDoGrupo(this.grupo.id).renomearChaveFrontmatter(antiga, nova));
+				const migrados = await migrarFn(chaveAntiga, chaveNova);
+				definir(chaveNova);
+				await this.plugin.salvarConfiguracoes();
+				new Notice(`Chave renomeada em ${migrados} tarefa(s).`);
+			});
+		});
+	}
+
+	// Liga/desliga campos inteiros (Status, Prazo, Horário... + cada propriedade customizada) na nota nova.
+	// Mesmo padrão de "null = valores padrão" já usado em renderizarPropriedadesVisiveis, com outra fonte de
+	// itens — aqui o padrão exclui "Repetir até" (ver idsTemplateNotaVisiveisPorPadrao), não é "tudo".
+	private renderizarCamposTemplateNota(container: HTMLElement): void {
+		const itens: { id: string; rotulo: string }[] = [
+			...CAMPOS_TEMPLATE_NOTA_FIXOS,
+			...[...this.grupo.propriedades].sort((a, b) => a.ordem - b.ordem).map((def) => ({ id: def.id, rotulo: def.rotulo })),
+		];
+		const padrao = idsTemplateNotaVisiveisPorPadrao(this.configEfetiva);
+
+		new Setting(container)
+			.setName("Campos visíveis na nota nova")
+			.setDesc(
+				'Escolha quais campos aparecem quando você clica em "Nova tarefa". "Repetir até" nasce desligado — só faz sentido depois de definir uma Recorrência.'
+			);
+
+		const caixa = container.createDiv({ cls: "mytasks-cores-caixa" });
+		for (const item of itens) {
+			const marcado = campoVisivelNaNota(this.configEfetiva, item.id);
+			new Setting(caixa).setName(item.rotulo).addToggle((toggle) =>
+				toggle.setValue(marcado).onChange(async (valor) => {
+					const base = this.grupo.templateNota.camposVisiveis ?? padrao;
+					const nova = valor ? [...new Set([...base, item.id])] : base.filter((id) => id !== item.id);
+					const ehIgualAoPadrao = nova.length === padrao.length && padrao.every((id) => nova.includes(id));
+					this.grupo.templateNota.camposVisiveis = ehIgualAoPadrao ? null : nova;
+					await this.plugin.salvarConfiguracoes();
+				})
+			);
+		}
+	}
+
+	// Restringe quais opções aparecem dentro de um campo de opção fixa (Status/Seleção/Recorrência) na
+	// nota nova. `undefined` = todas visíveis (mesmo princípio de null-means-all, mas aqui undefined
+	// porque essas listas — diferente de camposVisiveis — nascem ausentes, não uma lista vazia).
+	private renderizarOpcoesTemplateNota(
+		container: HTMLElement,
+		titulo: string,
+		opcoes: { valor: string; rotulo: string }[],
+		obterAtual: () => string[] | undefined,
+		definir: (lista: string[] | undefined) => void
+	): void {
+		const todosOsValores = opcoes.map((o) => o.valor);
+
+		new Setting(container).setName(titulo).setDesc("Escolha quais opções desse campo aparecem na nota nova.");
+
+		const caixa = container.createDiv({ cls: "mytasks-cores-caixa" });
+		for (const opcao of opcoes) {
+			const atual = obterAtual();
+			const marcado = atual === undefined || atual.includes(opcao.valor);
+			new Setting(caixa).setName(opcao.rotulo).addToggle((toggle) =>
+				toggle.setValue(marcado).onChange(async (valor) => {
+					const base = obterAtual() ?? todosOsValores;
+					const nova = valor ? [...new Set([...base, opcao.valor])] : base.filter((v) => v !== opcao.valor);
+					definir(nova.length === todosOsValores.length ? undefined : nova);
+					await this.plugin.salvarConfiguracoes();
+				})
+			);
+		}
+	}
+
 	private renderizarAgrupamentoPadrao(
 		container: HTMLElement,
 		titulo: string,
@@ -578,7 +885,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private renderizarItemFiltro(container: HTMLElement, filtro: FiltroSalvo) {
-		const quantidade = filtro.condicoes.length;
+		const quantidade = contarCondicoes(filtro.raiz);
 		const setting = new Setting(container)
 			.setName(filtro.nome)
 			.setDesc(quantidade > 0 ? `${quantidade} condição(ões)` : "Sem condições");
@@ -856,7 +1163,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 						...visualizacao,
 						id: `${visualizacao.id}_copia_${Date.now()}`,
 						nome: `${visualizacao.nome} (cópia)`,
-						condicoes: visualizacao.condicoes.map((c) => ({ ...c, valores: [...c.valores] })),
+						raiz: clonarGrupoFiltro(visualizacao.raiz),
 					};
 					this.grupo.visualizacoesSalvas.push(copia);
 					await this.plugin.salvarConfiguracoes();
@@ -894,7 +1201,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			partes.push(`agrupado por ${rotuloAgrupamento(visualizacao.agrupamento, this.configEfetiva)}`);
 		}
 
-		const quantidade = visualizacao.condicoes.length;
+		const quantidade = contarCondicoes(visualizacao.raiz);
 		if (quantidade > 0) partes.push(`${quantidade} filtro(s)`);
 
 		return partes.join(" · ");

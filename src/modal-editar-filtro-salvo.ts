@@ -1,5 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
-import { CondicaoFiltro, ConfigEfetivaGrupo, FiltroSalvo } from "./tipos";
+import { ConfigEfetivaGrupo, FiltroSalvo, GrupoFiltro, clonarGrupoFiltro, grupoFiltroVazio } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ConstrutorFiltro } from "./construtor-filtro";
 
@@ -10,7 +10,7 @@ function gerarId(): string {
 
 export class ModalEditarFiltroSalvo extends Modal {
 	private nome: string;
-	private condicoes: CondicaoFiltro[];
+	private raiz: GrupoFiltro;
 
 	constructor(
 		app: App,
@@ -21,7 +21,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 	) {
 		super(app);
 		this.nome = filtroExistente?.nome ?? "";
-		this.condicoes = (filtroExistente?.condicoes ?? []).map((c) => ({ ...c, valores: [...c.valores] }));
+		this.raiz = filtroExistente ? clonarGrupoFiltro(filtroExistente.raiz) : grupoFiltroVazio();
 	}
 
 	onOpen(): void {
@@ -39,8 +39,8 @@ export class ModalEditarFiltroSalvo extends Modal {
 			app: this.app,
 			configuracoes: this.configuracoes,
 			repositorio: this.repositorio,
-			condicoesIniciais: this.condicoes,
-			aoMudar: (condicoes) => (this.condicoes = condicoes),
+			raizInicial: this.raiz,
+			aoMudar: (raiz) => (this.raiz = raiz),
 		});
 
 		new Setting(contentEl).addButton((btn) =>
@@ -52,7 +52,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 					this.aoSalvar({
 						id: this.filtroExistente?.id ?? gerarId(),
 						nome: this.nome.trim(),
-						condicoes: this.condicoes,
+						raiz: this.raiz,
 					});
 					this.close();
 				})

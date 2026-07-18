@@ -249,20 +249,77 @@
 	font-size: 0.85em;
 }
 
-.mytasks-construtor-filtro-linha {
+/* Cada nível de grupo aninhado ("+ Adicionar grupo de filtros") reaproveita a mesma borda de indentação
+   acima — um GrupoFiltro dentro de outro simplesmente ganha mais um .mytasks-construtor-filtro por dentro. */
+.mytasks-construtor-filtro-itens {
+	display: flex;
+	flex-direction: column;
+}
+
+/* Uma condição ou subgrupo, com a palavra-conectivo ("onde"/"e"/"ou") à esquerda. A divisória fina entre
+   itens vive aqui (não mais em -linha), porque -item é quem tem irmãos de verdade dentro de -itens. */
+.mytasks-construtor-filtro-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
 	margin-bottom: 8px;
 	padding-bottom: 8px;
-	/* Linha divisória fina entre um filtro e o próximo (workspace / status / prazo…). */
 	border-bottom: 1px solid var(--gt-borda-fraca, var(--background-modifier-border));
 }
 
-.mytasks-construtor-filtro-linha:last-child {
-	border-bottom: none;
+.mytasks-construtor-filtro-item:last-child {
+	margin-bottom: 0;
 	padding-bottom: 0;
+	border-bottom: none;
+}
+
+.mytasks-construtor-filtro-conector {
+	flex: 0 0 36px;
+	padding-top: 6px;
+	font-size: 0.85em;
+	color: var(--text-muted);
+}
+
+.mytasks-construtor-filtro-item > *:last-child {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.mytasks-construtor-filtro-linha {
+	display: flex;
+	flex-direction: column;
 }
 
 .mytasks-construtor-filtro-valor {
 	margin: 4px 0 4px 8px;
+}
+
+/* Modo "</>" — edição em texto bruto (YAML) de uma condição ou grupo específico. */
+.mytasks-construtor-filtro-bruto {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.mytasks-construtor-filtro-bruto-texto {
+	width: 100%;
+	min-height: 90px;
+	padding: 6px 8px;
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	border-radius: var(--gt-raio, 6px);
+	border: 1px solid var(--gt-borda, var(--background-modifier-border));
+	background: var(--background-primary);
+	resize: vertical;
+}
+
+.mytasks-construtor-filtro-bruto-erro {
+	font-size: 0.82em;
+	color: var(--text-error, #e03131);
+}
+
+.mytasks-construtor-filtro-bruto-erro:empty {
+	display: none;
 }
 
 /* Divisória mais grossa entre as seções do modal (Filtro / Filtro móvel / Código),
@@ -313,6 +370,24 @@
 	font-size: 0.9em;
 	border-radius: var(--gt-raio, 8px);
 	background: var(--background-primary);
+}
+
+/* Item da lista buscável do SeletorPropriedade (menu nativo de sugestão do Obsidian, .suggestion-item) —
+   ícone do tipo + rótulo lado a lado. */
+.mytasks-seletor-propriedade-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.mytasks-seletor-propriedade-icone {
+	display: flex;
+	color: var(--text-muted);
+}
+
+.mytasks-seletor-propriedade-icone svg {
+	width: 14px;
+	height: 14px;
 }
 
 .mytasks-seletor-agrupamento {

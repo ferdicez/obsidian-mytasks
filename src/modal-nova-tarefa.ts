@@ -35,6 +35,10 @@ export class ModalNovaTarefa extends Modal {
 	private valores: Record<string, PropriedadeValor> = {};
 	private divCamposComData!: HTMLElement;
 
+	// Modo criação (tarefaExistente ausente) ficou sem call sites depois que "Nova tarefa" passou a criar a
+	// nota direto e abrir ela (ver RepositorioTarefas.criarTarefaEmBranco) — os campos viraram widgets Meta
+	// Bind no corpo da nota em vez desse formulário. Mantido assim mesmo (não vale separar a classe por
+	// isso): os dois modos compartilham quase todo o código de renderização.
 	constructor(
 		app: App,
 		private configuracoes: ConfigEfetivaGrupo,

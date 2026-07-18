@@ -1,14 +1,15 @@
-import { Plugin, WorkspaceLeaf } from "obsidian";
+import { Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import {
 	CONFIGURACOES_PADRAO,
 	ConfiguracoesGestorTarefas,
 	GRUPO_PADRAO,
 	GrupoTarefas,
+	arquivoEhTarefaRelevante,
 	configDoGrupo,
 	grupoAtivoOuPrimeiro,
 	normalizarChave,
 } from "./tipos";
-import { RepositorioTarefas } from "./repositorio-tarefas";
+import { RepositorioTarefas, renomearChaveEmArquivos } from "./repositorio-tarefas";
 import { VistaLista, TIPO_VISTA_LISTA } from "./vista-lista";
 import { VistaListaAba, TIPO_VISTA_LISTA_ABA } from "./vista-lista-aba";
 import { VistaCalendarioSidebar, TIPO_VISTA_CALENDARIO_SIDEBAR } from "./vista-calendario-sidebar";
@@ -43,6 +44,26 @@ export default class MyTasksPlugin extends Plugin {
 
 	grupoDefault(): GrupoTarefas {
 		return this.configuracoes.grupos[0];
+	}
+
+	// Renomeia a chave do discriminador de grupo (propriedadeGrupo, campo global) no frontmatter — diferente
+	// de RepositorioTarefas.renomearChaveFrontmatter (escopado a UM grupo), essa chave atravessa TODOS os
+	// grupos, então soma os arquivos relevantes de cada um (deduplicados por caminho, já que um arquivo não
+	// pode ser relevante a dois grupos ao mesmo tempo na prática, mas a união evita processar 2x por engano).
+	async renomearChavePropriedadeGrupo(chaveAntiga: string, chaveNova: string): Promise<number> {
+		const caminhos = new Set<string>();
+		const arquivos: TFile[] = [];
+		for (const grupo of this.configuracoes.grupos) {
+			const config = configDoGrupo(this.configuracoes, grupo);
+			for (const arquivo of this.app.vault.getMarkdownFiles()) {
+				if (caminhos.has(arquivo.path)) continue;
+				if (arquivoEhTarefaRelevante(config, arquivo.path)) {
+					caminhos.add(arquivo.path);
+					arquivos.push(arquivo);
+				}
+			}
+		}
+		return renomearChaveEmArquivos(this.app, arquivos, chaveAntiga, chaveNova);
 	}
 
 	async onload() {
@@ -270,6 +291,13 @@ export default class MyTasksPlugin extends Plugin {
 			grupo.dataTarefa.chave = normalizarChave(grupo.dataTarefa.rotulo);
 		}
 
+		// Chave técnica do status ausente: config salva antes de ConfigStatus ganhar `chave` — o merge raso
+		// do Object.assign(GRUPO_PADRAO, grupoSalvo) substitui o objeto `status` inteiro, perdendo o default.
+		// Sempre "status" (nunca deriva do rótulo) — é a chave real que já está em toda tarefa existente.
+		if (!grupo.status.chave) {
+			grupo.status.chave = "status";
+		}
+
 		// `destaque` (campo único antigo) -> `destaques` (um dono por estilo).
 		const destaqueAntigo = dadosDoGrupo.destaque as
 			| { propriedadeId: string; estilo: "checkbox" | "linha" | "borda"; espessuraCheckbox?: "fina" | "media" | "grossa" }
@@ -300,6 +328,24 @@ export default class MyTasksPlugin extends Plugin {
 		if (grupo.destaques && "linha" in grupo.destaques) {
 			delete (grupo.destaques as Record<string, unknown>).linha;
 		}
+
+		// `condicoes: CondicaoFiltro[]` (lista plana antiga) -> `raiz: GrupoFiltro` (árvore E/OU/NENHUM).
+		// Envelopa como um único grupo "e" com as condições antigas como folhas — mesmo comportamento de
+		// sempre (tudo combinado com E), só que agora representável na árvore nova.
+		for (const filtro of grupo.filtrosSalvos) this.migrarCondicoesLegadas(filtro);
+		for (const view of grupo.visualizacoesSalvas) this.migrarCondicoesLegadas(view);
+	}
+
+	private migrarCondicoesLegadas(itemTipado: unknown): void {
+		const item = itemTipado as Record<string, unknown>;
+		if (item.raiz) return; // já migrado (idempotente)
+		const condicoesAntigas = (item.condicoes ?? []) as Record<string, unknown>[];
+		item.raiz = {
+			tipo: "grupo",
+			combinador: "e",
+			itens: condicoesAntigas.map((c) => ({ tipo: "condicao", ...c })),
+		};
+		delete item.condicoes;
 	}
 
 	async salvarConfiguracoes() {

@@ -1,5 +1,16 @@
 import { App, Modal, Setting } from "obsidian";
-import { CondicaoFiltro, ConfigEfetivaGrupo, ID_STATUS, ModoCalendario, ROTULOS_MODO, TipoAgrupamento, TipoView, VisualizacaoSalva } from "./tipos";
+import {
+	ConfigEfetivaGrupo,
+	GrupoFiltro,
+	ID_STATUS,
+	ModoCalendario,
+	ROTULOS_MODO,
+	TipoAgrupamento,
+	TipoView,
+	VisualizacaoSalva,
+	clonarGrupoFiltro,
+	grupoFiltroVazio,
+} from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ConstrutorFiltro } from "./construtor-filtro";
 
@@ -17,7 +28,7 @@ function gerarId(): string {
 export class ModalEditarVisualizacaoSalva extends Modal {
 	private nome: string;
 	private tipoView: TipoView;
-	private condicoes: CondicaoFiltro[];
+	private raiz: GrupoFiltro;
 	private agrupamento: TipoAgrupamento;
 	private modoCalendario: ModoCalendario;
 	private filtrosExtrasIds: string[];
@@ -34,7 +45,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 		super(app);
 		this.nome = visualizacaoExistente?.nome ?? "";
 		this.tipoView = visualizacaoExistente?.tipoView ?? "lista";
-		this.condicoes = (visualizacaoExistente?.condicoes ?? []).map((c) => ({ ...c, valores: [...c.valores] }));
+		this.raiz = visualizacaoExistente ? clonarGrupoFiltro(visualizacaoExistente.raiz) : grupoFiltroVazio();
 		this.agrupamento = visualizacaoExistente?.agrupamento ?? (this.tipoView === "kanban" ? ID_STATUS : "nenhum");
 		this.modoCalendario = visualizacaoExistente?.modoCalendario ?? "mes";
 		this.filtrosExtrasIds = [...(visualizacaoExistente?.filtrosExtrasIds ?? [])];
@@ -77,8 +88,8 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 			app: this.app,
 			configuracoes: this.configuracoes,
 			repositorio: this.repositorio,
-			condicoesIniciais: this.condicoes,
-			aoMudar: (condicoes) => (this.condicoes = condicoes),
+			raizInicial: this.raiz,
+			aoMudar: (raiz) => (this.raiz = raiz),
 		});
 
 		if (this.tipoView !== "calendario") {
@@ -113,7 +124,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 						id: this.visualizacaoExistente?.id ?? gerarId(),
 						nome: this.nome.trim(),
 						tipoView: this.tipoView,
-						condicoes: this.condicoes,
+						raiz: this.raiz,
 						agrupamento: this.tipoView === "calendario" ? undefined : this.agrupamento,
 						modoCalendario: this.tipoView === "calendario" ? this.modoCalendario : undefined,
 						filtrosExtrasIds: this.tipoView === "calendario" ? undefined : this.filtrosExtrasIds,

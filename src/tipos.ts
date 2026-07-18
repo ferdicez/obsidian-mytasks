@@ -52,7 +52,15 @@ export type ConfigDestaques = Partial<Record<EstiloDestaque, ConfigDestaque>>;
 
 export const ID_STATUS = "status";
 
-export type OperadorFiltro = "igual" | "arquivo-atual" | "periodo";
+export type OperadorFiltro =
+	| "igual" // valor está entre os selecionados (comportamento de sempre)
+	| "diferente" // valor NÃO está entre os selecionados
+	| "contem" // texto: substring; lista: mesma semântica que "igual" já tinha (array contém algum dos valores)
+	| "nao-contem" // negação de "contem"
+	| "vazio" // propriedade nula/ausente/""/[] — sem valor
+	| "nao-vazio" // oposto de "vazio"
+	| "arquivo-atual" // inalterado (link_arquivo)
+	| "periodo"; // inalterado (sistema de período rico, ver PeriodoFiltro)
 
 // "antes"/"depois" comparam com uma única âncora; "referente-a" define uma janela [início, fim] em torno de hoje.
 export type OperadorPeriodo = "antes" | "depois" | "referente-a";
@@ -79,7 +87,10 @@ export interface PeriodoFiltro {
 
 export type CombinacaoPeriodos = "e" | "ou";
 
+// Uma condição-folha (compara UMA propriedade). Grupos (E/OU/NENHUM aninhados) são GrupoFiltro — ver
+// abaixo. `tipo` é o discriminante que separa folha de grupo dentro de um ItemFiltro[].
 export interface CondicaoFiltro {
+	tipo: "condicao";
 	propriedadeId: string;
 	operador: OperadorFiltro;
 	valores: string[];
@@ -88,6 +99,44 @@ export interface CondicaoFiltro {
 	// entra se casar QUALQUER período (união, ex: próximos 30 dias OU atrasadas); "e" = precisa casar todos.
 	periodos?: PeriodoFiltro[];
 	combinacaoPeriodos?: CombinacaoPeriodos; // default "ou"
+}
+
+// "e" = todos os itens verdadeiros (E); "ou" = qualquer item verdadeiro (OU); "nenhum" = nenhum item
+// verdadeiro (NÃO — equivale a negar um OU dos itens).
+export type CombinadorGrupo = "e" | "ou" | "nenhum";
+
+// Grupo de condições/subgrupos combinados por E/OU/NENHUM — pode aninhar outros GrupoFiltro
+// recursivamente (estilo Bases: "+ Adicionar grupo de filtros"). FiltroSalvo/VisualizacaoSalva guardam
+// UM GrupoFiltro raiz (não mais uma lista plana de condições).
+export interface GrupoFiltro {
+	tipo: "grupo";
+	combinador: CombinadorGrupo;
+	itens: ItemFiltro[];
+}
+
+export type ItemFiltro = CondicaoFiltro | GrupoFiltro;
+
+export function grupoFiltroVazio(): GrupoFiltro {
+	return { tipo: "grupo", combinador: "e", itens: [] };
+}
+
+// Clone profundo de uma árvore de filtro — substitui o antigo `condicoes.map(c => ({...c, valores:[...]}))`
+// usado em todo lugar que precisa de uma cópia independente (construtor, modais, seletor, motores). Um
+// clone raso não basta mais: mutar uma condição dentro de um subgrupo clonado rasamente ainda mutaria o
+// item original (o subgrupo em si não teria sido copiado).
+export function clonarGrupoFiltro(grupo: GrupoFiltro): GrupoFiltro {
+	return {
+		tipo: "grupo",
+		combinador: grupo.combinador,
+		itens: grupo.itens.map((item) =>
+			item.tipo === "grupo" ? clonarGrupoFiltro(item) : { ...item, valores: [...item.valores] }
+		),
+	};
+}
+
+// Conta condições-folha recursivamente (pra mostrar "3 condições" em Configurações, por exemplo).
+export function contarCondicoes(grupo: GrupoFiltro): number {
+	return grupo.itens.reduce((total, item) => total + (item.tipo === "grupo" ? contarCondicoes(item) : 1), 0);
 }
 
 // Lê os períodos de uma condição normalizando o legado `periodo` (único) para a lista `periodos`.
@@ -105,11 +154,11 @@ export interface VisualizacaoSalva {
 	id: string;
 	nome: string;
 	tipoView: TipoView;
-	condicoes: CondicaoFiltro[];
+	raiz: GrupoFiltro;
 	agrupamento?: TipoAgrupamento;
 	modoCalendario?: ModoCalendario;
 	// IDs de Filtros salvos (Configurações → Filtros) disponíveis como filtro extra opcional quando
-	// esta visualização está embutida numa nota — soma-se (E lógico) ao filtro fixo (`condicoes`) acima.
+	// esta visualização está embutida numa nota — soma-se (E lógico) ao filtro fixo (`raiz`) acima.
 	filtrosExtrasIds?: string[];
 	// Qual dos filtrosExtrasIds já vem selecionado ao abrir/renderizar o embed. Deve ser um dos IDs
 	// presentes em filtrosExtrasIds — se não estiver mais na lista (ex: removido depois), é ignorado.
@@ -120,7 +169,7 @@ export interface VisualizacaoSalva {
 export interface FiltroSalvo {
 	id: string;
 	nome: string;
-	condicoes: CondicaoFiltro[];
+	raiz: GrupoFiltro;
 }
 
 export interface PropriedadeDefinida {
@@ -136,6 +185,9 @@ export interface PropriedadeDefinida {
 
 export interface ConfigStatus {
 	rotulo: string;
+	// Chave técnica no frontmatter (default "status") — separada do rótulo exibido, mesmo padrão de
+	// ConfigData.chave. Configs salvas antes dessa separação existir são migradas em migrarCamposDeGrupo.
+	chave: string;
 	opcoes: OpcaoSelecao[];
 }
 
@@ -143,6 +195,74 @@ export interface ConfigData {
 	rotulo: string;
 	chave: string;
 }
+
+// Chaves técnicas no frontmatter dos demais campos fixos do plugin (fora status/prazo, que já tinham seu
+// próprio par rotulo/chave). Renomeável em Configurações → Avançado, com migração automática no vault
+// (ver RepositorioTarefas.renomearChaveFrontmatter). statusAnterior/ocorrenciaAnterior/proximaOcorrencia
+// são campos de uso interno (encadeamento de recorrência) — sem rótulo próprio, só a chave.
+export interface ChavesFixas {
+	horario: string;
+	recorrencia: string;
+	recorrenciaDataFim: string;
+	antecedencia: string;
+	manterHistorico: string;
+	entrada: string;
+	statusAnterior: string;
+	ocorrenciaAnterior: string;
+	proximaOcorrencia: string;
+}
+
+export const CHAVES_FIXAS_PADRAO: ChavesFixas = {
+	horario: "horario",
+	recorrencia: "recorrencia",
+	recorrenciaDataFim: "recorrencia_data_fim",
+	antecedencia: "antecedencia",
+	manterHistorico: "manter_historico",
+	entrada: "entrada",
+	statusAnterior: "status_anterior",
+	ocorrenciaAnterior: "ocorrencia_anterior",
+	proximaOcorrencia: "proxima_ocorrencia",
+};
+
+export interface CampoTemplateFixo {
+	id: string;
+	rotulo: string;
+}
+
+// Campos fixos (além das propriedades customizadas) que podem aparecer na nota criada por "Nova tarefa",
+// na ordem em que são desenhados no corpo da nota gerada por gerarCorpoMetaBind. Os rótulos aqui são
+// genéricos (usados só na tela de Configurações) — o corpo da nota usa os rótulos configuráveis reais
+// (ex: config.status.rotulo, config.dataTarefa.rotulo) para os campos que têm rótulo customizável.
+export const CAMPOS_TEMPLATE_NOTA_FIXOS: CampoTemplateFixo[] = [
+	{ id: "status", rotulo: "Status" },
+	{ id: "prazo", rotulo: "Prazo" },
+	{ id: "horario", rotulo: "Horário" },
+	{ id: "manter_historico", rotulo: "Manter registro ao concluir" },
+	{ id: "recorrencia", rotulo: "Recorrência" },
+	{ id: "repetir_ate", rotulo: "Repetir até" },
+	{ id: "antecedencia", rotulo: "Avisar com antecedência" },
+];
+
+// Configuração de quais campos (e, nos de opção fixa, quais opções) geram código Meta Bind pra "Nova
+// tarefa" (ver meta-bind-tarefa.ts). `camposVisiveis: null` = todos visíveis, exceto "repetir_ate" (ver
+// idsTemplateNotaVisiveisPorPadrao). As demais listas ausentes/undefined também significam "todas as
+// opções visíveis" (mesmo princípio, campo a campo).
+//
+// notaModeloCaminho: quando preenchido, "Nova tarefa" copia o CORPO dessa nota (sem o frontmatter dela)
+// pra dentro da tarefa nova, em vez de gerar o corpo automaticamente — permite que ela monte a nota do
+// jeito que quiser, colando os códigos abaixo onde e como preferir. null/ausente = sem nota modelo, usa
+// a geração automática (gerarCorpoMetaBind) como hoje.
+export interface TemplateNotaTarefa {
+	camposVisiveis: string[] | null;
+	opcoesStatusVisiveis?: string[];
+	opcoesRecorrenciaVisiveis?: Recorrencia[];
+	opcoesPropriedadeVisiveis?: Record<string, string[]>;
+	notaModeloCaminho?: string | null;
+}
+
+export const TEMPLATE_NOTA_PADRAO: TemplateNotaTarefa = {
+	camposVisiveis: null,
+};
 
 // Config "efetiva" de um grupo: o shape plano que TODOS os consumidores de leitura (motores, render,
 // agrupamento, filtro, seletores, modal) enxergam. Cada grupo carrega uma cópia independente destes campos;
@@ -170,6 +290,11 @@ export interface ConfigEfetivaGrupo {
 	filtroPadraoCalendarioId: string | null;
 	filtroPadraoKanbanId: string | null;
 	filtroPadraoListaId: string | null;
+	// Quais campos/opções aparecem na nota criada por "Nova tarefa" (ver meta-bind-tarefa.ts).
+	templateNota: TemplateNotaTarefa;
+	// Chaves técnicas dos campos fixos (fora status/prazo, que têm seu próprio par rotulo/chave) — ver
+	// ChavesFixas. Renomeável em Configurações → Avançado, com migração automática no vault.
+	chavesFixas: ChavesFixas;
 	// Campos derivados só-leitura, preenchidos por configDoGrupo, para o repositório carimbar o discriminador
 	// ao criar tarefas e resolver o pertencimento — não são persistidos (vêm do grupo + do topo global).
 	readonly __propriedadeGrupo?: string | null;
@@ -207,6 +332,7 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	pastaConcluidas: "",
 	status: {
 		rotulo: "Status",
+		chave: "status",
 		opcoes: [{ valor: "Inbox" }, { valor: "Fazer" }, { valor: "Concluído" }],
 	},
 	dataTarefa: { rotulo: "Data", chave: "data" },
@@ -230,6 +356,8 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	filtroPadraoCalendarioId: null,
 	filtroPadraoKanbanId: null,
 	filtroPadraoListaId: null,
+	templateNota: { ...TEMPLATE_NOTA_PADRAO },
+	chavesFixas: { ...CHAVES_FIXAS_PADRAO },
 };
 
 export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
@@ -330,13 +458,17 @@ export function migrarReferenciasPropriedade(grupo: GrupoTarefas, idAntigo: stri
 		if (destaque?.propriedadeId === idAntigo) destaque.propriedadeId = idNovo;
 	}
 
-	const migrarCondicoes = (condicoes: CondicaoFiltro[]) => {
-		for (const condicao of condicoes) {
-			if (condicao.propriedadeId === idAntigo) condicao.propriedadeId = idNovo;
+	// Caminha a árvore recursivamente — uma condição pode estar aninhada dentro de qualquer nível de
+	// subgrupo (ver GrupoFiltro), não só no topo.
+	const migrarItem = (item: ItemFiltro) => {
+		if (item.tipo === "grupo") {
+			for (const filho of item.itens) migrarItem(filho);
+			return;
 		}
+		if (item.propriedadeId === idAntigo) item.propriedadeId = idNovo;
 	};
-	for (const filtro of grupo.filtrosSalvos) migrarCondicoes(filtro.condicoes);
-	for (const view of grupo.visualizacoesSalvas) migrarCondicoes(view.condicoes);
+	for (const filtro of grupo.filtrosSalvos) migrarItem(filtro.raiz);
+	for (const view of grupo.visualizacoesSalvas) migrarItem(view.raiz);
 }
 
 export function ultimaOpcaoStatus(status: ConfigStatus): string | undefined {
@@ -426,6 +558,29 @@ export function obterVisualizacao(
 
 export function obterFiltroSalvo(configuracoes: ConfigEfetivaGrupo, id: string): FiltroSalvo | undefined {
 	return configuracoes.filtrosSalvos.find((f) => f.id === id);
+}
+
+// Ids de todos os campos que podem aparecer na nota criada por "Nova tarefa": os 7 fixos + cada
+// propriedade customizada cadastrada no grupo.
+export function idsTemplateNotaDisponiveis(config: ConfigEfetivaGrupo): string[] {
+	return [...CAMPOS_TEMPLATE_NOTA_FIXOS.map((c) => c.id), ...config.propriedades.map((p) => p.id)];
+}
+
+// "Repetir até" só faz sentido com uma Recorrência definida, mas o Meta Bind não tem como esconder um
+// campo condicionado ao valor de outro sem instalar plugins extras e ligar execução de JS nas notas — a
+// Fernanda preferiu não fazer isso. Meio-termo: esse campo nasce desligado por padrão (ela liga na mão
+// quando for configurar uma recorrência); os demais continuam nascendo todos ligados.
+const CAMPO_TEMPLATE_NOTA_OCULTO_POR_PADRAO = "repetir_ate";
+
+// Ids visíveis quando templateNota.camposVisiveis ainda é null (padrão de fábrica, antes dela customizar).
+export function idsTemplateNotaVisiveisPorPadrao(config: ConfigEfetivaGrupo): string[] {
+	return idsTemplateNotaDisponiveis(config).filter((id) => id !== CAMPO_TEMPLATE_NOTA_OCULTO_POR_PADRAO);
+}
+
+export function campoVisivelNaNota(config: ConfigEfetivaGrupo, campoId: string): boolean {
+	const lista = config.templateNota.camposVisiveis;
+	if (lista === null) return idsTemplateNotaVisiveisPorPadrao(config).includes(campoId);
+	return lista.includes(campoId);
 }
 
 export function emPeriodoDeAviso(tarefa: Tarefa, hoje: Date): boolean {

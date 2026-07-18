@@ -1,16 +1,17 @@
 import { App, setIcon } from "obsidian";
 import {
-	CondicaoFiltro,
 	ConfigEfetivaGrupo,
+	GrupoFiltro,
 	ID_STATUS,
 	Tarefa,
 	TipoAgrupamento,
+	clonarGrupoFiltro,
 	emPeriodoDeAviso,
 	estaNoInbox,
+	grupoFiltroVazio,
 	obterFiltroSalvo,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
-import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa } from "./render-tarefa";
 import { agruparTarefas } from "./motor-agrupamento";
 import { compilarFiltro } from "./motor-filtro";
@@ -44,7 +45,7 @@ export interface OpcoesMotorLista {
 
 export class MotorLista {
 	private agrupamento: TipoAgrupamento;
-	private condicoesFiltro: CondicaoFiltro[] = [];
+	private grupoFiltro: GrupoFiltro = grupoFiltroVazio();
 	private filtroSalvoId: string | null = null;
 	private areaCorpo: HTMLElement | null = null;
 	private modo: "tarefas" | "inbox" = "tarefas";
@@ -55,7 +56,7 @@ export class MotorLista {
 		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
 		if (filtroInicial) {
 			this.filtroSalvoId = filtroInicial.id;
-			this.condicoesFiltro = filtroInicial.condicoes.map((c) => ({ ...c, valores: [...c.valores] }));
+			this.grupoFiltro = clonarGrupoFiltro(filtroInicial.raiz);
 		}
 	}
 
@@ -75,7 +76,7 @@ export class MotorLista {
 		const base = todas.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true));
 
 		if (!this.opcoes.mostrarToggleInbox) {
-			const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+			const filtroInterativo = compilarFiltro(this.grupoFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
 			return base.filter(filtroInterativo);
 		}
 
@@ -90,7 +91,7 @@ export class MotorLista {
 		// dos panos e poderia esconder tarefas recém-criadas sem nenhum aviso na tela.
 		if (this.modo === "inbox") return porModo;
 
-		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+		const filtroInterativo = compilarFiltro(this.grupoFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
 		return porModo.filter(filtroInterativo);
 	}
 
@@ -220,9 +221,9 @@ export class MotorLista {
 				filtroAtualId: this.filtroSalvoId,
 				restringirAIds: this.opcoes.filtrosExtrasIds,
 				elementoAlinhamento: cabecalho,
-				aoEscolher: (filtroId, condicoes) => {
+				aoEscolher: (filtroId, raiz) => {
 					this.filtroSalvoId = filtroId;
-					this.condicoesFiltro = condicoes;
+					this.grupoFiltro = raiz;
 					this.renderizarCorpo();
 				},
 			});
@@ -235,11 +236,10 @@ export class MotorLista {
 			});
 			const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
 			setIcon(iconeNova, "square-plus");
-			botaoNova.addEventListener("click", () => {
-				new ModalNovaTarefa(this.opcoes.app, this.opcoes.configuracoes, this.opcoes.repositorio, async (titulo, dados) => {
-					await this.opcoes.repositorio.criarTarefa(titulo, dados);
-					this.renderizar();
-				}).open();
+			botaoNova.addEventListener("click", async () => {
+				const arquivo = await this.opcoes.repositorio.criarTarefaEmBranco();
+				this.renderizar();
+				this.opcoes.app.workspace.openLinkText(arquivo.path, "", false);
 			});
 		}
 	}

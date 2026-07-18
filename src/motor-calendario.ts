@@ -1,5 +1,16 @@
 import { App, Menu, setIcon } from "obsidian";
-import { CondicaoFiltro, ConfigEfetivaGrupo, ConfiguracoesGestorTarefas, ID_STATUS, ModoCalendario, ROTULOS_MODO, Tarefa, obterFiltroSalvo } from "./tipos";
+import {
+	ConfigEfetivaGrupo,
+	ConfiguracoesGestorTarefas,
+	GrupoFiltro,
+	ID_STATUS,
+	ModoCalendario,
+	ROTULOS_MODO,
+	Tarefa,
+	clonarGrupoFiltro,
+	grupoFiltroVazio,
+	obterFiltroSalvo,
+} from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA, OpcoesCartaoTarefa } from "./render-tarefa";
@@ -60,7 +71,7 @@ export class MotorCalendario {
 	private modo: ModoCalendario;
 	private dataReferencia: Date = new Date();
 	private diaExpandido: string | null = null;
-	private condicoesFiltro: CondicaoFiltro[] = [];
+	private grupoFiltro: GrupoFiltro = grupoFiltroVazio();
 	private filtroSalvoId: string | null = null;
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorCalendario) {
@@ -69,7 +80,7 @@ export class MotorCalendario {
 		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
 		if (filtroInicial) {
 			this.filtroSalvoId = filtroInicial.id;
-			this.condicoesFiltro = filtroInicial.condicoes.map((c) => ({ ...c, valores: [...c.valores] }));
+			this.grupoFiltro = clonarGrupoFiltro(filtroInicial.raiz);
 		}
 	}
 
@@ -98,7 +109,7 @@ export class MotorCalendario {
 	private tarefasFiltradas(): Tarefa[] {
 		const todas = this.opcoes.repositorio.listarTarefas().filter((t) => t.data !== null);
 		const filtroFixo = this.opcoes.filtro ? todas.filter(this.opcoes.filtro) : todas;
-		const filtroInterativo = compilarFiltro(this.condicoesFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
+		const filtroInterativo = compilarFiltro(this.grupoFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
 		return filtroFixo.filter(filtroInterativo);
 	}
 
@@ -169,9 +180,9 @@ export class MotorCalendario {
 				configuracoes: this.opcoes.configuracoes,
 				filtroAtualId: this.filtroSalvoId,
 				restringirAIds: this.opcoes.filtrosExtrasIds,
-				aoEscolher: (filtroId, condicoes) => {
+				aoEscolher: (filtroId, raiz) => {
 					this.filtroSalvoId = filtroId;
-					this.condicoesFiltro = condicoes;
+					this.grupoFiltro = raiz;
 					this.renderizar();
 				},
 			});
@@ -241,17 +252,10 @@ export class MotorCalendario {
 			item
 				.setTitle("Nova tarefa nesta data")
 				.setIcon("plus")
-				.onClick(() => {
-					new ModalNovaTarefa(
-						this.opcoes.app,
-						this.opcoes.configuracoes,
-						this.opcoes.repositorio,
-						async (titulo, dados) => {
-							await this.opcoes.repositorio.criarTarefa(titulo, dados);
-							this.renderizar();
-						},
-						{ data, horario }
-					).open();
+				.onClick(async () => {
+					const arquivo = await this.opcoes.repositorio.criarTarefaEmBranco({ data, horario });
+					this.renderizar();
+					this.opcoes.app.workspace.openLinkText(arquivo.path, "", false);
 				})
 		);
 		menu.showAtMouseEvent(evento);

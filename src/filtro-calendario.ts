@@ -1,10 +1,11 @@
 import { App, parseYaml } from "obsidian";
 import { ConfigEfetivaGrupo, ModoCalendario, Tarefa } from "./tipos";
-import { compilarFiltro, condicoesDeFiltroYaml } from "./motor-filtro";
+import { compilarFiltro, grupoFiltroDeYaml } from "./motor-filtro";
 
 interface ConfigBlocoCalendario {
 	modo?: string;
-	filtro?: Record<string, string>;
+	// Formato plano ({propriedade: valor}) ou grupos aninhados e:/ou:/nao: — ver grupoFiltroDeYaml.
+	filtro?: unknown;
 }
 
 export interface BlocoCalendarioCompilado {
@@ -28,10 +29,10 @@ export function compilarBlocoCalendario(
 	}
 
 	const modo = MODOS_VALIDOS.includes(config.modo as ModoCalendario) ? (config.modo as ModoCalendario) : "mes";
-	const condicoes = condicoesDeFiltroYaml(config.filtro);
+	const raiz = grupoFiltroDeYaml(config.filtro);
 
 	return {
 		modo,
-		filtro: compilarFiltro(condicoes, app, sourcePath, configuracoes),
+		filtro: compilarFiltro(raiz, app, sourcePath, configuracoes),
 	};
 }

@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { PropriedadeDefinida, PropriedadeValor, Recorrencia, REGEX_HORARIO } from "./tipos";
+import { ChavesFixas, PropriedadeDefinida, PropriedadeValor, Recorrencia, REGEX_HORARIO } from "./tipos";
 
 export function formatarLinkArquivo(app: App, arquivoOrigem: TFile, caminhoDestino: string): string | undefined {
 	const destino = app.vault.getAbstractFileByPath(caminhoDestino);
@@ -32,7 +32,9 @@ export function escreverFrontmatter(
 	fm: Record<string, unknown>,
 	dados: DadosTarefaEscrita,
 	definicoes: PropriedadeDefinida[],
-	chaveData = "data"
+	chaveData: string,
+	chaveStatus: string,
+	chavesFixas: ChavesFixas
 ): void {
 	// Ordem de escrita pedida pela Fernanda (a ordem de inserção das chaves é o que decide a ordem
 	// no frontmatter): 1) grupo (carimbado por fora, antes desta função) → 2) entrada (idem) →
@@ -59,21 +61,24 @@ export function escreverFrontmatter(
 		}
 	}
 
-	fm.status = dados.status;
+	fm[chaveStatus] = dados.status;
 
-	if (dados.horario && REGEX_HORARIO.test(dados.horario)) fm.horario = dados.horario;
-	else delete fm.horario;
+	if (dados.horario && REGEX_HORARIO.test(dados.horario)) fm[chavesFixas.horario] = dados.horario;
+	else delete fm[chavesFixas.horario];
 
-	fm.recorrencia = dados.recorrencia;
-	fm.manter_historico = dados.manterHistorico;
-	delete fm.recorrencia_manter_historico;
+	fm[chavesFixas.recorrencia] = dados.recorrencia;
+	fm[chavesFixas.manterHistorico] = dados.manterHistorico;
+	// Chave legada do plugin (não tem relação com renomeação feita pela usuária) — limpa resquício de
+	// versões antigas, só quando não é a própria chave configurada agora (evita apagar dado de verdade
+	// no caso improvável dela ter escolhido esse mesmo nome).
+	if (chavesFixas.manterHistorico !== "recorrencia_manter_historico") delete fm.recorrencia_manter_historico;
 
-	if (dados.recorrenciaDataFim) fm.recorrencia_data_fim = dados.recorrenciaDataFim;
-	else delete fm.recorrencia_data_fim;
+	if (dados.recorrenciaDataFim) fm[chavesFixas.recorrenciaDataFim] = dados.recorrenciaDataFim;
+	else delete fm[chavesFixas.recorrenciaDataFim];
 
-	if (dados.diasAntecedenciaAviso) fm.antecedencia = dados.diasAntecedenciaAviso;
-	else delete fm.antecedencia;
-	delete fm.dias_antecedencia_aviso;
+	if (dados.diasAntecedenciaAviso) fm[chavesFixas.antecedencia] = dados.diasAntecedenciaAviso;
+	else delete fm[chavesFixas.antecedencia];
+	if (chavesFixas.antecedencia !== "dias_antecedencia_aviso") delete fm.dias_antecedencia_aviso;
 }
 
 export function lerFrontmatter(

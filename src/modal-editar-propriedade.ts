@@ -122,7 +122,7 @@ export class ModalEditarPropriedade extends Modal {
 							`Renomear a chave "${idAntigo}" para "${id}"? Isso reescreve o frontmatter de todas as tarefas existentes que usam essa propriedade.`
 						);
 						if (!confirmado) return;
-						const migrados = (await this.repositorio?.renomearChavePropriedade(idAntigo, id)) ?? 0;
+						const migrados = (await this.repositorio?.renomearChaveFrontmatter(idAntigo, id)) ?? 0;
 						new Notice(`Chave renomeada em ${migrados} tarefa(s).`);
 					}
 
