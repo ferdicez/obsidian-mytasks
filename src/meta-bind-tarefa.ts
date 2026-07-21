@@ -122,12 +122,12 @@ export function listarCamposMetaBind(
 		});
 	}
 	if (campoVisivelNaNota(config, "horario")) {
-		campos.push({ id: "horario", rotulo: "Horário", codigo: `INPUT[time:${config.chavesFixas.horario}]`, inline: true });
+		campos.push({ id: "horario", rotulo: "horário", codigo: `INPUT[time:${config.chavesFixas.horario}]`, inline: true });
 	}
 	if (campoVisivelNaNota(config, "manter_historico")) {
 		campos.push({
 			id: "manter_historico",
-			rotulo: "Manter registro ao concluir",
+			rotulo: "manter registro ao concluir",
 			codigo: `INPUT[toggle:${config.chavesFixas.manterHistorico}]`,
 			inline: true,
 		});
@@ -136,7 +136,7 @@ export function listarCamposMetaBind(
 		const partes = opcoesRecorrenciaVisiveis(config).map((chave) => opcaoMetaBind(chave, RECORRENCIA_LABELS[chave]));
 		campos.push({
 			id: "recorrencia",
-			rotulo: "Recorrência",
+			rotulo: "recorrência",
 			codigo: `INPUT[inlineSelect(${partes.join(", ")}):${config.chavesFixas.recorrencia}]`,
 			inline: true,
 		});
@@ -144,7 +144,7 @@ export function listarCamposMetaBind(
 	if (campoVisivelNaNota(config, "repetir_ate")) {
 		campos.push({
 			id: "repetir_ate",
-			rotulo: "Repetir até",
+			rotulo: "repetir até",
 			codigo: `INPUT[date:${config.chavesFixas.recorrenciaDataFim}]`,
 			inline: true,
 		});
@@ -152,7 +152,7 @@ export function listarCamposMetaBind(
 	if (campoVisivelNaNota(config, "antecedencia")) {
 		campos.push({
 			id: "antecedencia",
-			rotulo: "Avisar com antecedência",
+			rotulo: "avisar com antecedência",
 			codigo: `INPUT[number:${config.chavesFixas.antecedencia}]`,
 			inline: true,
 		});
@@ -163,7 +163,7 @@ export function listarCamposMetaBind(
 		// o Kanban e a Lista já usam, ao invés de só trocar o valor cru da propriedade de status.
 		campos.push({
 			id: "concluir_botao",
-			rotulo: "Concluir tarefa",
+			rotulo: "concluir tarefa",
 			codigo:
 				'```meta-bind-button\nlabel: "Concluir"\nicon: check\nstyle: primary\naction:\n  type: command\n  command: my-tasks:concluir-tarefa-atual\n```',
 			inline: false,

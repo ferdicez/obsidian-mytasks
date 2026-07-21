@@ -220,7 +220,7 @@ export class RepositorioTarefas {
 				fm[config.__propriedadeGrupo] = config.__valorGrupo ?? "";
 			}
 			fm[chavesFixas.entrada] = formatarData(new Date());
-			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas);
+			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas, true);
 		});
 		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;
@@ -288,7 +288,7 @@ export class RepositorioTarefas {
 		const config = this.obterConfiguracoes();
 		const { propriedades, dataTarefa, chavesFixas } = config;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas);
+			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas, false);
 		});
 	}
 

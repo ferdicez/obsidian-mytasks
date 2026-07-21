@@ -17,7 +17,7 @@ export class VistaCalendarioAba extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "Calendário de tarefas";
+		return "calendário de tarefas";
 	}
 
 	getIcon(): string {

@@ -112,11 +112,11 @@ export default class MyTasksPlugin extends Plugin {
 		// Um ícone de ribbon por grupo (a Lista da sidebar) — cada um abre a lista do seu grupo.
 		this.registrarRibbonsDeGrupos();
 
-		this.addRibbonIcon("calendar-days", "Abrir Calendário de Tarefas", () => {
+		this.addRibbonIcon("calendar-days", "Abrir calendário de tarefas", () => {
 			this.ativarVistaCalendarioAba();
 		});
 
-		this.addRibbonIcon("square-kanban", "Abrir Kanban de Tarefas", () => {
+		this.addRibbonIcon("square-kanban", "Abrir kanban de tarefas", () => {
 			this.ativarVistaKanbanAba();
 		});
 
@@ -146,7 +146,7 @@ export default class MyTasksPlugin extends Plugin {
 
 		this.addCommand({
 			id: "abrir-kanban-tarefas-aba",
-			name: "Abrir Kanban de tarefas (tela cheia)",
+			name: "Abrir kanban de tarefas (tela cheia)",
 			callback: () => this.ativarVistaKanbanAba(),
 		});
 

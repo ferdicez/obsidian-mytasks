@@ -234,14 +234,14 @@ export interface CampoTemplateFixo {
 // genéricos (usados só na tela de Configurações) — o corpo da nota usa os rótulos configuráveis reais
 // (ex: config.status.rotulo, config.dataTarefa.rotulo) para os campos que têm rótulo customizável.
 export const CAMPOS_TEMPLATE_NOTA_FIXOS: CampoTemplateFixo[] = [
-	{ id: "status", rotulo: "Status" },
-	{ id: "prazo", rotulo: "Prazo" },
-	{ id: "horario", rotulo: "Horário" },
-	{ id: "manter_historico", rotulo: "Manter registro ao concluir" },
-	{ id: "recorrencia", rotulo: "Recorrência" },
-	{ id: "repetir_ate", rotulo: "Repetir até" },
-	{ id: "antecedencia", rotulo: "Avisar com antecedência" },
-	{ id: "concluir_botao", rotulo: "Botão: Concluir tarefa" },
+	{ id: "status", rotulo: "status" },
+	{ id: "prazo", rotulo: "prazo" },
+	{ id: "horario", rotulo: "horário" },
+	{ id: "manter_historico", rotulo: "manter registro ao concluir" },
+	{ id: "recorrencia", rotulo: "recorrência" },
+	{ id: "repetir_ate", rotulo: "repetir até" },
+	{ id: "antecedencia", rotulo: "avisar com antecedência" },
+	{ id: "concluir_botao", rotulo: "botão: concluir tarefa" },
 ];
 
 // Configuração de quais campos (e, nos de opção fixa, quais opções) geram código Meta Bind pra "Nova

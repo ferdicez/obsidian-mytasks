@@ -44,7 +44,7 @@ type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "nota" | "fi
 const PAGINAS: { id: PaginaConfig; rotulo: string }[] = [
 	{ id: "geral", rotulo: "Geral" },
 	{ id: "calendario", rotulo: "Calendário" },
-	{ id: "kanban", rotulo: "Kanban" },
+	{ id: "kanban", rotulo: "kanban" },
 	{ id: "tarefas", rotulo: "Tarefas" },
 	{ id: "nota", rotulo: "Nota de tarefa" },
 	{ id: "filtros", rotulo: "Filtros" },
@@ -1210,7 +1210,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private descricaoVisualizacao(visualizacao: VisualizacaoSalva): string {
-		const nomes: Record<string, string> = { lista: "Lista", calendario: "Calendário", kanban: "Kanban" };
+		const nomes: Record<string, string> = { lista: "Lista", calendario: "Calendário", kanban: "kanban" };
 		const partes = [nomes[visualizacao.tipoView] ?? visualizacao.tipoView];
 
 		if (visualizacao.tipoView === "calendario" && visualizacao.modoCalendario) {

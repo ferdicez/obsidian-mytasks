@@ -17,7 +17,7 @@ import { ConstrutorFiltro } from "./construtor-filtro";
 const ROTULOS_TIPO_VIEW: Record<TipoView, string> = {
 	lista: "Lista",
 	calendario: "Calendário",
-	kanban: "Kanban",
+	kanban: "kanban",
 };
 
 function gerarId(): string {

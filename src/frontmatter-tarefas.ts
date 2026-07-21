@@ -34,13 +34,20 @@ export function escreverFrontmatter(
 	definicoes: PropriedadeDefinida[],
 	chaveData: string,
 	chaveStatus: string,
-	chavesFixas: ChavesFixas
+	chavesFixas: ChavesFixas,
+	criando: boolean
 ): void {
 	// Ordem de escrita pedida pela Fernanda (a ordem de inserção das chaves é o que decide a ordem
 	// no frontmatter): 1) grupo (carimbado por fora, antes desta função) → 2) entrada (idem) →
 	// 3) prazo → 4) propriedades customizadas. Os demais campos padrão do plugin (status, horário,
 	// recorrência...) vêm depois, sem posição específica pedida por ela.
+	//
+	// Campo vazio na CRIAÇÃO vira `null` (a chave nasce presente, vazia — aparece no painel de
+	// Properties e no widget do Meta Bind da nota nova, inclusive quando copiada de uma nota modelo).
+	// Campo vazio na EDIÇÃO continua sendo apagado (limpar a data numa tarefa existente deve remover
+	// a propriedade, não deixar `null` sobrando).
 	if (dados.data) fm[chaveData] = dados.data;
+	else if (criando) fm[chaveData] = null;
 	else delete fm[chaveData];
 
 	for (const def of definicoes) {
@@ -64,6 +71,7 @@ export function escreverFrontmatter(
 	fm[chaveStatus] = dados.status;
 
 	if (dados.horario && REGEX_HORARIO.test(dados.horario)) fm[chavesFixas.horario] = dados.horario;
+	else if (criando) fm[chavesFixas.horario] = null;
 	else delete fm[chavesFixas.horario];
 
 	fm[chavesFixas.recorrencia] = dados.recorrencia;
@@ -74,9 +82,11 @@ export function escreverFrontmatter(
 	if (chavesFixas.manterHistorico !== "recorrencia_manter_historico") delete fm.recorrencia_manter_historico;
 
 	if (dados.recorrenciaDataFim) fm[chavesFixas.recorrenciaDataFim] = dados.recorrenciaDataFim;
+	else if (criando) fm[chavesFixas.recorrenciaDataFim] = null;
 	else delete fm[chavesFixas.recorrenciaDataFim];
 
 	if (dados.diasAntecedenciaAviso) fm[chavesFixas.antecedencia] = dados.diasAntecedenciaAviso;
+	else if (criando) fm[chavesFixas.antecedencia] = null;
 	else delete fm[chavesFixas.antecedencia];
 	if (chavesFixas.antecedencia !== "dias_antecedencia_aviso") delete fm.dias_antecedencia_aviso;
 }

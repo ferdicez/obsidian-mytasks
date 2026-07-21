@@ -17,7 +17,7 @@ export class VistaKanbanAba extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "Kanban de tarefas";
+		return "kanban de tarefas";
 	}
 
 	getIcon(): string {

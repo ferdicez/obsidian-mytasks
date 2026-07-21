@@ -166,7 +166,7 @@ export class MotorKanban {
 			}
 		}
 
-		cabecalho.createEl("h3", { text: "Kanban" });
+		cabecalho.createEl("h3", { text: "kanban" });
 
 		// Sem elementoAlinhamento: os menus descem alinhados ao próprio botão clicado (igual ao
 		// Calendário), não ao início do cabeçalho — a pedido dela, pra abrir sob o botão de Filtro.

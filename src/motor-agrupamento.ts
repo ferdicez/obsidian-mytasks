@@ -69,7 +69,7 @@ export function agruparTarefas(
 			.map((valor) => ({ chave: valor, rotulo: rotular(valor), tarefas: porValor.get(valor)! }));
 
 		if (semValor.length > 0) {
-			grupos.push({ chave: "__sem_valor__", rotulo: "Sem valor", tarefas: semValor });
+			grupos.push({ chave: "__sem_valor__", rotulo: "outros", tarefas: semValor });
 		}
 		return grupos;
 	}
