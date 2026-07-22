@@ -568,7 +568,20 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			cls: "setting-item-description",
 		});
 
-		this.renderizarNotaModelo(containerEl);
+		this.renderizarNotaModelo(
+			containerEl,
+			"Nota modelo",
+			'Escolha uma nota do vault pra servir de modelo: "Nova tarefa" copia o corpo dela pra dentro da tarefa nova (o frontmatter da nota modelo é ignorado). Deixe em branco pra usar a geração automática com os campos abaixo.',
+			() => this.grupo.templateNota.notaModeloCaminho ?? null,
+			(caminho) => (this.grupo.templateNota.notaModeloCaminho = caminho)
+		);
+		this.renderizarNotaModelo(
+			containerEl,
+			"Nota modelo (Inbox)",
+			'Opcional: nota modelo exclusiva pra tarefas que nascem no Inbox (criadas sem data). Quando preenchida, tem prioridade sobre a "Nota modelo" acima só pro Inbox. Em branco = o Inbox usa a "Nota modelo" acima (ou a geração automática).',
+			() => this.grupo.templateNota.notaModeloInboxCaminho ?? null,
+			(caminho) => (this.grupo.templateNota.notaModeloInboxCaminho = caminho)
+		);
 
 		containerEl.createEl("h3", { text: "Campos" });
 		containerEl.createEl("p", {
@@ -628,28 +641,30 @@ export class AbaConfiguracoes extends PluginSettingTab {
 
 	// Campo de busca (mesmo autocomplete usado pra "link de arquivo" livre no modal de tarefa) pra escolher
 	// uma nota qualquer do vault como modelo — "Nova tarefa" passa a copiar o CORPO dela, ao invés de gerar
-	// o corpo automaticamente.
-	private renderizarNotaModelo(container: HTMLElement): void {
-		const setting = new Setting(container)
-			.setName("Nota modelo")
-			.setDesc(
-				'Escolha uma nota do vault pra servir de modelo: "Nova tarefa" copia o corpo dela pra dentro da tarefa nova (o frontmatter da nota modelo é ignorado). Deixe em branco pra usar a geração automática com os campos abaixo.'
-			);
+	// o corpo automaticamente. Parametrizado pra servir tanto à modelo geral quanto à exclusiva do Inbox.
+	private renderizarNotaModelo(
+		container: HTMLElement,
+		nome: string,
+		descricao: string,
+		obter: () => string | null,
+		definir: (caminho: string | null) => void
+	): void {
+		const setting = new Setting(container).setName(nome).setDesc(descricao);
 
 		setting.addSearch((search) => {
-			const caminhoAtual = this.grupo.templateNota.notaModeloCaminho;
+			const caminhoAtual = obter();
 			if (caminhoAtual) {
 				const arquivoAtual = this.app.vault.getAbstractFileByPath(caminhoAtual);
 				search.setValue(arquivoAtual?.name.replace(/\.md$/, "") ?? caminhoAtual);
 			}
 			new SugestorArquivos(this.app, search.inputEl, async (arquivo) => {
-				this.grupo.templateNota.notaModeloCaminho = arquivo.path;
+				definir(arquivo.path);
 				await this.plugin.salvarConfiguracoes();
 				this.display();
 			});
 			search.inputEl.addEventListener("input", async () => {
 				if (search.inputEl.value) return;
-				this.grupo.templateNota.notaModeloCaminho = null;
+				definir(null);
 				await this.plugin.salvarConfiguracoes();
 				this.display();
 			});

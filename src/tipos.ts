@@ -65,7 +65,9 @@ export type OperadorFiltro =
 // "antes"/"depois" comparam com uma única âncora; "referente-a" define uma janela [início, fim] em torno de hoje.
 export type OperadorPeriodo = "antes" | "depois" | "referente-a";
 
-// Âncoras de antes/depois: um ponto fixo. Âncoras de referente-a: uma janela.
+// Âncoras de antes/depois: um ponto fixo. Âncoras de referente-a: uma janela. "sem-prazo" é o caso
+// especial (só faz sentido com o operador "referente-a"): casa a tarefa que NÃO tem prazo — assim dá pra
+// montar "antes de hoje OU sem prazo" num bloco de período só, combinado pelo seletor E/OU dos prazos.
 export type AncoraPeriodo =
 	| "hoje"
 	| "amanha"
@@ -76,7 +78,8 @@ export type AncoraPeriodo =
 	| "proximos-dias"
 	| "proximo-mes"
 	| "ultimos-dias"
-	| "ultimo-mes";
+	| "ultimo-mes"
+	| "sem-prazo";
 
 export interface PeriodoFiltro {
 	operador: OperadorPeriodo;
@@ -253,12 +256,17 @@ export const CAMPOS_TEMPLATE_NOTA_FIXOS: CampoTemplateFixo[] = [
 // pra dentro da tarefa nova, em vez de gerar o corpo automaticamente — permite que ela monte a nota do
 // jeito que quiser, colando os códigos abaixo onde e como preferir. null/ausente = sem nota modelo, usa
 // a geração automática (gerarCorpoMetaBind) como hoje.
+//
+// notaModeloInboxCaminho: nota modelo exclusiva pra quando a tarefa nasce no Inbox (criada sem data). Se
+// preenchida, tarefas de Inbox usam ELA; tarefas com data seguem usando notaModeloCaminho (ou a geração
+// automática). null/ausente = Inbox não tem modelo própria, cai no fluxo normal (notaModeloCaminho/auto).
 export interface TemplateNotaTarefa {
 	camposVisiveis: string[] | null;
 	opcoesStatusVisiveis?: string[];
 	opcoesRecorrenciaVisiveis?: Recorrencia[];
 	opcoesPropriedadeVisiveis?: Record<string, string[]>;
 	notaModeloCaminho?: string | null;
+	notaModeloInboxCaminho?: string | null;
 }
 
 export const TEMPLATE_NOTA_PADRAO: TemplateNotaTarefa = {

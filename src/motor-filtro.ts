@@ -118,9 +118,12 @@ function compilarCondicao(condicao: CondicaoFiltro, notaAtual: TFile | null): (t
 				condicao.propriedadeId === ID_DATA
 					? tarefa.data
 					: (tarefa.propriedades[condicao.propriedadeId] as string | null);
-			if (!valor) return false;
 
 			const casaPeriodo = (periodo: PeriodoFiltro) => {
+				// "sem prazo" é o único período que casa JUSTAMENTE quando não há valor — tratado antes de
+				// tudo, tanto pra dizer "sim, sem prazo" quanto pra que os demais períodos digam "não" aqui.
+				if (periodo.ancora === "sem-prazo") return !valor;
+				if (!valor) return false;
 				const { limite, inicio, fim } = resolverPeriodo(periodo, new Date());
 				if (periodo.operador === "antes") return limite !== undefined && valor < limite;
 				if (periodo.operador === "depois") return limite !== undefined && valor > limite;

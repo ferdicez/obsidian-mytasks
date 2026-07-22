@@ -48,6 +48,7 @@ const ANCORAS_POR_OPERADOR: Record<OperadorPeriodo, { valor: AncoraPeriodo; rotu
 		{ valor: "proximo-mes", rotulo: "próximo mês" },
 		{ valor: "ultimos-dias", rotulo: "últimos dias" },
 		{ valor: "ultimo-mes", rotulo: "último mês" },
+		{ valor: "sem-prazo", rotulo: "sem prazo (vazio)" },
 	],
 };
 

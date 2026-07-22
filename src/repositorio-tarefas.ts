@@ -260,17 +260,20 @@ export class RepositorioTarefas {
 			propriedades: {},
 		});
 
-		const corpo = await this.obterCorpoNovaTarefa(config);
+		const noInbox = status === (primeiraOpcaoStatus(config.status) ?? "");
+		const corpo = await this.obterCorpoNovaTarefa(config, noInbox);
 		if (corpo) await this.app.vault.append(arquivo, "\n" + corpo + "\n");
 
 		return arquivo;
 	}
 
-	// Se ela configurou uma "nota modelo" (Configurações → Nota de tarefa), copia o CORPO dessa nota (sem o
-	// frontmatter dela) — assim ela decide livremente o layout, colando os códigos Meta Bind onde quiser.
-	// Sem nota modelo (ou se a que estava configurada sumiu/foi movida), cai na geração automática de sempre.
-	private async obterCorpoNovaTarefa(config: ConfigEfetivaGrupo): Promise<string> {
-		const caminhoModelo = config.templateNota.notaModeloCaminho;
+	// Escolhe o corpo da nota nova. Se a tarefa nasce no Inbox E existe uma "nota modelo (Inbox)" configurada,
+	// ela tem prioridade; senão cai na "nota modelo" geral (Configurações → Nota de tarefa), que copia o CORPO
+	// dessa nota (sem o frontmatter). Sem nenhuma modelo aplicável (ou se a configurada sumiu/foi movida), cai
+	// na geração automática de sempre.
+	private async obterCorpoNovaTarefa(config: ConfigEfetivaGrupo, noInbox: boolean): Promise<string> {
+		const caminhoInbox = config.templateNota.notaModeloInboxCaminho;
+		const caminhoModelo = noInbox && caminhoInbox ? caminhoInbox : config.templateNota.notaModeloCaminho;
 		if (caminhoModelo) {
 			const arquivoModelo = this.app.vault.getAbstractFileByPath(caminhoModelo);
 			if (arquivoModelo instanceof TFile) {
