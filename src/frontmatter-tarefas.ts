@@ -61,8 +61,14 @@ export function escreverFrontmatter(
 		const valor = dados.propriedades[def.id];
 		const vazio = valor === null || valor === undefined || valor === "" || (Array.isArray(valor) && valor.length === 0);
 		if (vazio) {
-			// Opcional e vazio na criação: não pré-grava (a chave nem nasce). Senão, apaga como sempre.
-			if (!ehOpcional(def.id)) delete fm[def.id];
+			// Opcional e vazio na criação: não pré-grava (a chave nem nasce).
+			// Senão, mesma regra dos campos fixos (prazo/horário/antecedência): na CRIAÇÃO a chave nasce
+			// presente e vazia (`null`), pra aparecer no painel de Properties e no widget do Meta Bind da
+			// nota nova — sem isso, nenhuma propriedade customizada marcada "Sempre" chegava a nascer,
+			// porque a tarefa nova nasce com todas elas vazias. Na EDIÇÃO continua apagando.
+			if (ehOpcional(def.id)) continue;
+			if (criando) fm[def.id] = null;
+			else delete fm[def.id];
 			continue;
 		}
 		if (def.tipo === "link_arquivo" && typeof valor === "string") {

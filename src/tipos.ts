@@ -606,6 +606,14 @@ export function idsTemplateNotaDisponiveis(config: ConfigEfetivaGrupo): string[]
 	return [...fixos.map((c) => c.id), ...config.propriedades.map((p) => p.id)];
 }
 
+// Todos os campos que EXISTEM no grupo, incluindo os que a config esconde da tela (recorrência/repetir até
+// quando `recorrenciaAtiva` é false). Diferente de idsTemplateNotaDisponiveis, que é a lista para MOSTRAR em
+// Configurações. Quem decide o que gravar no frontmatter precisa desta lista completa: um campo escondido
+// pela config continua tendo chave própria e precisa ser explicitamente marcado como "não pré-gravar".
+export function idsTemplateNotaTodos(config: ConfigEfetivaGrupo): string[] {
+	return [...CAMPOS_TEMPLATE_NOTA_FIXOS.map((c) => c.id), ...config.propriedades.map((p) => p.id)];
+}
+
 // "Repetir até" só faz sentido com uma Recorrência definida, mas o Meta Bind não tem como esconder um
 // campo condicionado ao valor de outro sem instalar plugins extras e ligar execução de JS nas notas — a
 // Fernanda preferiu não fazer isso. Meio-termo: esse campo nasce desligado por padrão (ela liga na mão

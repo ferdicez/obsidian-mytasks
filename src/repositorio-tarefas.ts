@@ -8,7 +8,7 @@ import {
 	arquivoEhTarefaRelevante,
 	campoPodeSerOpcional,
 	campoVisivelNaNota,
-	idsTemplateNotaDisponiveis,
+	idsTemplateNotaTodos,
 	opcaoStatusComData,
 	primeiraOpcaoStatus,
 	ultimaOpcaoStatus,
@@ -220,8 +220,13 @@ export class RepositorioTarefas {
 		// no frontmatter (era o bug: "oculto" só sumia da geração de código, mas a chave ainda era pré-gravada).
 		// Só vale pros campos opcionalizáveis — status/prazo (essenciais) nascem sempre, mesmo ocultos, pra não
 		// sumir das views. Ver escreverFrontmatter.
+		//
+		// Percorre TODOS os campos opcionalizáveis, não só os "disponíveis": quando o grupo tem
+		// `recorrenciaAtiva: false`, idsTemplateNotaDisponiveis tira "recorrencia"/"repetir_ate" da lista, e eles
+		// nunca chegavam a ser marcados como não-pré-graváveis — a chave `recorrencia` nascia no frontmatter mesmo
+		// com a recorrência desligada no grupo. campoVisivelNaNota já devolve false pros dois nesse caso.
 		const camposOpcionais = new Set(config.templateNota.camposOpcionais ?? []);
-		for (const id of idsTemplateNotaDisponiveis(config)) {
+		for (const id of idsTemplateNotaTodos(config)) {
 			if (campoPodeSerOpcional(id) && !campoVisivelNaNota(config, id)) camposOpcionais.add(id);
 		}
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
