@@ -19,6 +19,8 @@ import {
 	Recorrencia,
 	TipoAgrupamento,
 	VisualizacaoSalva,
+	campoEhOpcional,
+	campoPodeSerOpcional,
 	campoVisivelNaNota,
 	clonarGrupoFiltro,
 	configDoGrupo,
@@ -37,7 +39,7 @@ import { opcoesDeAgrupamento, rotuloAgrupamento } from "./seletor-agrupamento";
 import { contarReferenciasView } from "./localizador-referencias";
 import { ID_DATA_ENTRADA } from "./render-tarefa";
 import { SugestorArquivos } from "./sugestor-arquivos";
-import { CampoMetaBind, codigoParaColar, listarCamposMetaBind } from "./meta-bind-tarefa";
+import { CampoMetaBind, botaoAdicionarCampo, codigoParaColar, listarCamposMetaBind } from "./meta-bind-tarefa";
 
 type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "nota" | "filtros" | "avancado";
 
@@ -633,7 +635,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 
 		containerEl.createEl("h3", { text: "Códigos para colar" });
 		containerEl.createEl("p", {
-			text: 'Um código Meta Bind por campo visível acima — copie e cole onde quiser dentro da sua nota modelo (ou de qualquer nota). Muda ao vivo conforme você liga/desliga campos e opções nesta página.',
+			text: 'Um código Meta Bind por campo visível acima — copie e cole onde quiser dentro da sua nota modelo (ou de qualquer nota). Muda ao vivo conforme você liga/desliga campos e opções nesta página. Campos marcados "Opcional" ganham também um botão "adicionar" (ele cria a propriedade no frontmatter só quando você clicar) — cole o botão junto do campo.',
 			cls: "setting-item-description",
 		});
 		this.renderizarCodigosMetaBind(containerEl);
@@ -685,18 +687,27 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		}
 
 		for (const campo of campos) {
-			const bloco = container.createDiv({ cls: "mytasks-embed-bloco" });
-			const barra = bloco.createDiv({ cls: "mytasks-embed-barra" });
-			barra.createSpan({ text: campo.rotulo, cls: "mytasks-embed-rotulo" });
-			const botaoCopiar = barra.createEl("button", { text: "Copiar", cls: "mytasks-embed-copiar" });
-			const texto = codigoParaColar(campo);
-			botaoCopiar.addEventListener("click", async () => {
-				await navigator.clipboard.writeText(texto);
-				botaoCopiar.setText("Copiado!");
-				setTimeout(() => botaoCopiar.setText("Copiar"), 1500);
-			});
-			bloco.createEl("pre", { cls: "mytasks-embed-codigo", text: texto });
+			// Campo marcado "Opcional": mostra primeiro o botão que cria a propriedade, depois o campo.
+			if (campoEhOpcional(this.configEfetiva, campo.id)) {
+				const botao = botaoAdicionarCampo(campo);
+				if (botao) this.criarBlocoCodigo(container, `${campo.rotulo} — botão adicionar`, botao);
+			}
+			this.criarBlocoCodigo(container, campo.rotulo, codigoParaColar(campo));
 		}
+	}
+
+	// Um bloco copiável (barra com rótulo + botão "Copiar" + o código), mesmo padrão visual do embed.
+	private criarBlocoCodigo(container: HTMLElement, rotulo: string, texto: string): void {
+		const bloco = container.createDiv({ cls: "mytasks-embed-bloco" });
+		const barra = bloco.createDiv({ cls: "mytasks-embed-barra" });
+		barra.createSpan({ text: rotulo, cls: "mytasks-embed-rotulo" });
+		const botaoCopiar = barra.createEl("button", { text: "Copiar", cls: "mytasks-embed-copiar" });
+		botaoCopiar.addEventListener("click", async () => {
+			await navigator.clipboard.writeText(texto);
+			botaoCopiar.setText("Copiado!");
+			setTimeout(() => botaoCopiar.setText("Copiar"), 1500);
+		});
+		bloco.createEl("pre", { cls: "mytasks-embed-codigo", text: texto });
 	}
 
 	// Chaves técnicas (frontmatter) dos campos fixos do plugin — renomear aqui reescreve automaticamente
@@ -787,24 +798,59 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		const padrao = idsTemplateNotaVisiveisPorPadrao(this.configEfetiva);
 
 		new Setting(container)
-			.setName("Campos visíveis na nota nova")
+			.setName("Campos na nota nova")
 			.setDesc(
-				'Escolha quais campos aparecem quando você clica em "Nova tarefa". "Repetir até" nasce desligado — só faz sentido depois de definir uma Recorrência.'
+				'Como cada campo aparece quando você clica em "Nova tarefa". "Sempre" = nasce gravado no frontmatter. ' +
+					'"Opcional" = não nasce; você adiciona depois clicando no botão "adicionar" que aparece na seção de códigos abaixo. ' +
+					'"Oculto" = não aparece. "Repetir até" nasce oculto — só faz sentido depois de definir uma Recorrência.'
 			);
 
 		const caixa = container.createDiv({ cls: "mytasks-cores-caixa" });
 		for (const item of itens) {
-			const marcado = campoVisivelNaNota(this.configEfetiva, item.id);
-			new Setting(caixa).setName(item.rotulo).addToggle((toggle) =>
-				toggle.setValue(marcado).onChange(async (valor) => {
-					const base = this.grupo.templateNota.camposVisiveis ?? padrao;
-					const nova = valor ? [...new Set([...base, item.id])] : base.filter((id) => id !== item.id);
-					const ehIgualAoPadrao = nova.length === padrao.length && padrao.every((id) => nova.includes(id));
-					this.grupo.templateNota.camposVisiveis = ehIgualAoPadrao ? null : nova;
+			const visivel = campoVisivelNaNota(this.configEfetiva, item.id);
+			const opcional = campoEhOpcional(this.configEfetiva, item.id);
+			const setting = new Setting(caixa).setName(item.rotulo);
+
+			if (!campoPodeSerOpcional(item.id)) {
+				// Campos essenciais (status/prazo) ou sem chave (botão): só ligam/desligam, não viram opcionais.
+				setting.addToggle((toggle) =>
+					toggle.setValue(visivel).onChange(async (valor) => {
+						this.definirVisibilidadeCampoTemplate(item.id, valor, padrao);
+						await this.plugin.salvarConfiguracoes();
+					})
+				);
+				continue;
+			}
+
+			const estado: "sempre" | "opcional" | "oculto" = !visivel ? "oculto" : opcional ? "opcional" : "sempre";
+			setting.addDropdown((dropdown) => {
+				dropdown.addOption("sempre", "Sempre");
+				dropdown.addOption("opcional", "Opcional");
+				dropdown.addOption("oculto", "Oculto");
+				dropdown.setValue(estado).onChange(async (valor) => {
+					this.definirVisibilidadeCampoTemplate(item.id, valor !== "oculto", padrao);
+					this.definirCampoOpcionalTemplate(item.id, valor === "opcional");
 					await this.plugin.salvarConfiguracoes();
-				})
-			);
+				});
+			});
 		}
+	}
+
+	// Liga/desliga um campo na lista camposVisiveis (colapsando de volta pra null quando bate o padrão de
+	// fábrica, pra não persistir uma lista redundante). `padrao` é idsTemplateNotaVisiveisPorPadrao.
+	private definirVisibilidadeCampoTemplate(id: string, visivel: boolean, padrao: string[]): void {
+		const base = this.grupo.templateNota.camposVisiveis ?? padrao;
+		const nova = visivel ? [...new Set([...base, id])] : base.filter((x) => x !== id);
+		const ehIgualAoPadrao = nova.length === padrao.length && padrao.every((x) => nova.includes(x));
+		this.grupo.templateNota.camposVisiveis = ehIgualAoPadrao ? null : nova;
+	}
+
+	// Marca/desmarca um campo como opcional (não pré-gravado). Lista vazia é normalizada pra undefined,
+	// pra não persistir um array vazio à toa (mesmo princípio null-means-nothing das outras listas).
+	private definirCampoOpcionalTemplate(id: string, opcional: boolean): void {
+		const base = this.grupo.templateNota.camposOpcionais ?? [];
+		const nova = opcional ? [...new Set([...base, id])] : base.filter((x) => x !== id);
+		this.grupo.templateNota.camposOpcionais = nova.length > 0 ? nova : undefined;
 	}
 
 	// Restringe quais opções aparecem dentro de um campo de opção fixa (Status/Seleção/Recorrência) na

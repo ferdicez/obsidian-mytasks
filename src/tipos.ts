@@ -260,8 +260,14 @@ export const CAMPOS_TEMPLATE_NOTA_FIXOS: CampoTemplateFixo[] = [
 // notaModeloInboxCaminho: nota modelo exclusiva pra quando a tarefa nasce no Inbox (criada sem data). Se
 // preenchida, tarefas de Inbox usam ELA; tarefas com data seguem usando notaModeloCaminho (ou a geração
 // automática). null/ausente = Inbox não tem modelo própria, cai no fluxo normal (notaModeloCaminho/auto).
+// camposOpcionais: campos que NÃO nascem pré-gravados no frontmatter da tarefa nova — a chave só passa a
+// existir quando a usuária a adiciona pela nota (botão updateMetadata do Meta Bind) ou preenche o campo.
+// Serve pra manter o frontmatter limpo de campos que ela não usa (ex: "antecedência", "repetir até").
+// Ausente/vazio = nenhum campo opcional (comportamento antigo: todos os campos visíveis nascem gravados).
+// Só campos com chave própria pré-gravável entram aqui — ver CAMPOS_TEMPLATE_NOTA_OPCIONALIZAVEIS.
 export interface TemplateNotaTarefa {
 	camposVisiveis: string[] | null;
+	camposOpcionais?: string[];
 	opcoesStatusVisiveis?: string[];
 	opcoesRecorrenciaVisiveis?: Recorrencia[];
 	opcoesPropriedadeVisiveis?: Record<string, string[]>;
@@ -272,6 +278,24 @@ export interface TemplateNotaTarefa {
 export const TEMPLATE_NOTA_PADRAO: TemplateNotaTarefa = {
 	camposVisiveis: null,
 };
+
+// Campos fixos que NÃO podem virar opcionais (sempre nascem quando visíveis): status e prazo são o núcleo
+// que Lista/Kanban/Calendário usam pra achar/ordenar tarefa (marcar opcional poderia fazer tarefa sumir das
+// views); concluir_botao é um botão, não tem chave de frontmatter pra pré-gravar. Entrada e grupo nem
+// passam pelo controle de template (são carimbados sempre em criarTarefa), então não aparecem aqui.
+const CAMPOS_TEMPLATE_NOTA_NAO_OPCIONALIZAVEIS = ["status", "prazo", "concluir_botao"];
+
+// Um campo fixo/propriedade pode ser marcado "opcional" (não nasce pré-gravado)? Só os que têm chave própria
+// pré-gravável — exclui os essenciais e o botão de concluir.
+export function campoPodeSerOpcional(campoId: string): boolean {
+	return !CAMPOS_TEMPLATE_NOTA_NAO_OPCIONALIZAVEIS.includes(campoId);
+}
+
+// Um campo está marcado como opcional neste grupo? (só faz sentido pra campos visíveis e opcionalizáveis).
+export function campoEhOpcional(config: ConfigEfetivaGrupo, campoId: string): boolean {
+	if (!campoPodeSerOpcional(campoId)) return false;
+	return config.templateNota.camposOpcionais?.includes(campoId) ?? false;
+}
 
 // Config "efetiva" de um grupo: o shape plano que TODOS os consumidores de leitura (motores, render,
 // agrupamento, filtro, seletores, modal) enxergam. Cada grupo carrega uma cópia independente destes campos;

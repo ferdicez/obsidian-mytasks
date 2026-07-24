@@ -1,5 +1,5 @@
 import { App } from "obsidian";
-import { ConfigEfetivaGrupo, OpcaoSelecao, PropriedadeDefinida, RECORRENCIA_LABELS, Recorrencia, campoVisivelNaNota } from "./tipos";
+import { ConfigEfetivaGrupo, OpcaoSelecao, PropriedadeDefinida, RECORRENCIA_LABELS, Recorrencia, campoPodeSerOpcional, campoVisivelNaNota } from "./tipos";
 
 // Meta Bind aceita valor de option() sem aspas só quando não há espaço/vírgula/parênteses/aspas. Qualquer
 // outro caractere exige aspas (com a aspas interna escapada) — mais seguro que assumir sempre sem aspas.
@@ -39,17 +39,43 @@ function opcoesPropriedadeVisiveis(config: ConfigEfetivaGrupo, def: PropriedadeD
 
 // Um campo/propriedade traduzido pra sintaxe Meta Bind. `inline: true` = campo simples (`INPUT[...]`,
 // mostrado entre crases simples numa nota); `inline: false` = precisa de bloco de código (``` meta-bind).
+// `chave`/`valorInicialBotao`: usados pra gerar o botão "adicionar propriedade" (só pra campos que podem
+// ser opcionais — ver botaoAdicionarCampo). Ausentes = campo não gera botão (ex: concluir_botao).
 export interface CampoMetaBind {
 	id: string;
 	rotulo: string;
 	codigo: string;
 	inline: boolean;
+	chave?: string;
+	valorInicialBotao?: string;
 }
 
 // Texto pronto pra colar numa nota: envolve em crase simples quando inline, ou devolve o bloco de código
 // como está (já vem com as crases triplas).
 export function codigoParaColar(campo: CampoMetaBind): string {
 	return campo.inline ? `\`${campo.codigo}\`` : campo.codigo;
+}
+
+// Botão Meta Bind (declarativo, sem JS) que CRIA a propriedade do campo no frontmatter da nota atual —
+// pra campos marcados "opcionais", que não nascem pré-gravados. A ação updateMetadata com evaluate:false
+// escreve um valor literal na `bindTarget` (a chave), fazendo a chave passar a existir; a partir daí o
+// campo de preenchimento (INPUT[...]) que ela colou ao lado consegue editar a propriedade normalmente.
+// Retorna null se o campo não tem chave (ex: um botão não vira "propriedade opcional").
+export function botaoAdicionarCampo(campo: CampoMetaBind): string | null {
+	if (!campo.chave || !campoPodeSerOpcional(campo.id)) return null;
+	const valor = campo.valorInicialBotao ?? "null";
+	return [
+		"```meta-bind-button",
+		`label: "adicionar ${campo.rotulo}"`,
+		"icon: plus",
+		"style: default",
+		"action:",
+		"  type: updateMetadata",
+		`  bindTarget: ${campo.chave}`,
+		"  evaluate: false",
+		`  value: ${valor}`,
+		"```",
+	].join("\n");
 }
 
 function campoPropriedade(
@@ -60,25 +86,31 @@ function campoPropriedade(
 ): CampoMetaBind | null {
 	switch (def.tipo) {
 		case "texto":
-			return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[text:${def.id}]`, inline: true };
+			return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[text:${def.id}]`, inline: true, chave: def.id, valorInicialBotao: "null" };
 		case "data":
-			return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[date:${def.id}]`, inline: true };
+			return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[date:${def.id}]`, inline: true, chave: def.id, valorInicialBotao: "null" };
 		case "selecao":
 			return {
 				id: def.id,
 				rotulo: def.rotulo,
 				codigo: campoInlineSelect(def.id, opcoesPropriedadeVisiveis(config, def)),
 				inline: true,
+				chave: def.id,
+				valorInicialBotao: "null",
 			};
 		case "link_arquivo": {
 			if (def.arquivosFixos && def.arquivosFixos.length > 0) {
 				const partes = def.arquivosFixos.map((caminho) => {
 					const arquivo = app.vault.getAbstractFileByPath(caminho);
-					return opcaoMetaBind(caminho, arquivo?.name.replace(/\.md$/, "") ?? caminho);
+					const nome = arquivo?.name.replace(/\.md$/, "") ?? caminho;
+					// O VALOR gravado precisa ser um wikilink [[nome]] — é a única forma que o Obsidian
+					// reconhece como frontmatterLink (o que `extrairArquivoLinkado` lê). O rótulo mostrado
+					// no suggester continua sendo só o nome legível.
+					return opcaoMetaBind(`[[${nome}]]`, nome);
 				});
-				return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[suggester(${partes.join(", ")}):${def.id}]`, inline: true };
+				return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[suggester(${partes.join(", ")}):${def.id}]`, inline: true, chave: def.id, valorInicialBotao: "null" };
 			}
-			return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[suggester:${def.id}]`, inline: true };
+			return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[suggester:${def.id}]`, inline: true, chave: def.id, valorInicialBotao: "null" };
 		}
 		case "lista": {
 			// Bloco de código: listSuggester não é permitido inline. As sugestões são uma foto estática dos
@@ -87,7 +119,8 @@ function campoPropriedade(
 			const usados = obterValoresUsados?.(def.id) ?? [];
 			const partes = usados.map((v) => opcaoMetaBind(v, v));
 			const corpo = partes.length > 0 ? `INPUT[listSuggester(${partes.join(", ")}):${def.id}]` : `INPUT[list:${def.id}]`;
-			return { id: def.id, rotulo: def.rotulo, codigo: `\`\`\`meta-bind\n${corpo}\n\`\`\``, inline: false };
+			// Lista nasce como array vazio (o botão cria a chave já como lista pra o listSuggester escrever nela).
+			return { id: def.id, rotulo: def.rotulo, codigo: `\`\`\`meta-bind\n${corpo}\n\`\`\``, inline: false, chave: def.id, valorInicialBotao: "[]" };
 		}
 		default:
 			return null;
@@ -122,7 +155,14 @@ export function listarCamposMetaBind(
 		});
 	}
 	if (campoVisivelNaNota(config, "horario")) {
-		campos.push({ id: "horario", rotulo: "horário", codigo: `INPUT[time:${config.chavesFixas.horario}]`, inline: true });
+		campos.push({
+			id: "horario",
+			rotulo: "horário",
+			codigo: `INPUT[time:${config.chavesFixas.horario}]`,
+			inline: true,
+			chave: config.chavesFixas.horario,
+			valorInicialBotao: "null",
+		});
 	}
 	if (campoVisivelNaNota(config, "manter_historico")) {
 		campos.push({
@@ -130,6 +170,8 @@ export function listarCamposMetaBind(
 			rotulo: "manter registro ao concluir",
 			codigo: `INPUT[toggle:${config.chavesFixas.manterHistorico}]`,
 			inline: true,
+			chave: config.chavesFixas.manterHistorico,
+			valorInicialBotao: "true",
 		});
 	}
 	if (campoVisivelNaNota(config, "recorrencia")) {
@@ -139,6 +181,8 @@ export function listarCamposMetaBind(
 			rotulo: "recorrência",
 			codigo: `INPUT[inlineSelect(${partes.join(", ")}):${config.chavesFixas.recorrencia}]`,
 			inline: true,
+			chave: config.chavesFixas.recorrencia,
+			valorInicialBotao: "nenhuma",
 		});
 	}
 	if (campoVisivelNaNota(config, "repetir_ate")) {
@@ -147,6 +191,8 @@ export function listarCamposMetaBind(
 			rotulo: "repetir até",
 			codigo: `INPUT[date:${config.chavesFixas.recorrenciaDataFim}]`,
 			inline: true,
+			chave: config.chavesFixas.recorrenciaDataFim,
+			valorInicialBotao: "null",
 		});
 	}
 	if (campoVisivelNaNota(config, "antecedencia")) {
@@ -155,6 +201,8 @@ export function listarCamposMetaBind(
 			rotulo: "avisar com antecedência",
 			codigo: `INPUT[number:${config.chavesFixas.antecedencia}]`,
 			inline: true,
+			chave: config.chavesFixas.antecedencia,
+			valorInicialBotao: "null",
 		});
 	}
 	if (campoVisivelNaNota(config, "concluir_botao")) {

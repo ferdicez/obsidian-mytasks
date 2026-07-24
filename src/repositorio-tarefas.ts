@@ -212,6 +212,9 @@ export class RepositorioTarefas {
 		const arquivo = await this.app.vault.create(caminho, "");
 		const config = this.obterConfiguracoes();
 		const { propriedades, dataTarefa, chavesFixas } = config;
+		// Campos marcados "opcionais" em Configurações → Nota de tarefa não nascem pré-gravados quando vazios
+		// (a chave só passa a existir quando ela adiciona pela nota). Ver campoEhOpcional/escreverFrontmatter.
+		const camposOpcionais = new Set(config.templateNota.camposOpcionais ?? []);
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			// Ordem pedida pela Fernanda: 1) grupo, 2) entrada, 3) prazo, 4) propriedades customizadas
 			// (as duas últimas são gravadas dentro de escreverFrontmatter). A ordem de inserção das
@@ -220,16 +223,16 @@ export class RepositorioTarefas {
 				fm[config.__propriedadeGrupo] = config.__valorGrupo ?? "";
 			}
 			fm[chavesFixas.entrada] = formatarData(new Date());
-			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas, true);
+			escreverFrontmatter(this.app, arquivo, fm, dados, propriedades, dataTarefa.chave ?? "data", config.status.chave || "status", chavesFixas, true, camposOpcionais);
 		});
 		await this.aguardarFrontmatterIndexado(arquivo);
 		return arquivo;
 	}
 
 	async criarTarefaRapida(titulo: string): Promise<TFile> {
-		const { status } = this.obterConfiguracoes();
-		return this.criarTarefa(titulo, {
-			status: primeiraOpcaoStatus(status) ?? "",
+		const config = this.obterConfiguracoes();
+		const arquivo = await this.criarTarefa(titulo, {
+			status: primeiraOpcaoStatus(config.status) ?? "",
 			data: null,
 			horario: null,
 			recorrencia: "nenhuma",
@@ -238,6 +241,14 @@ export class RepositorioTarefas {
 			diasAntecedenciaAviso: null,
 			propriedades: {},
 		});
+
+		// A captura rápida nasce sempre no Inbox — aplica o mesmo corpo de nota modelo que "Nova tarefa" usa
+		// (nota modelo do Inbox se houver, senão a geral, senão a geração automática). Ao contrário do botão
+		// "Nova tarefa", mantém o título digitado e NÃO abre a nota (o fluxo de captura rápida segue fluido).
+		const corpo = await this.obterCorpoNovaTarefa(config, true);
+		if (corpo) await this.app.vault.append(arquivo, "\n" + corpo + "\n");
+
+		return arquivo;
 	}
 
 	// Cria uma tarefa com nome genérico (sem pedir título) e o corpo já preenchido — quem chama abre a nota
