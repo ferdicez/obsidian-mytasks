@@ -55,6 +55,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.addClass("mytasks-modal-filtro");
+		contentEl.addClass("mytasks-modal-cards");
 		contentEl.createEl("h2", {
 			text: this.visualizacaoExistente ? "Editar visualização" : "Nova visualização",
 		});
@@ -83,7 +84,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 		this.renderizarCamposCondicionais(divCondicional);
 
 		contentEl.createEl("h3", { text: "Filtro" });
-		const divFiltro = contentEl.createDiv();
+		const divFiltro = contentEl.createDiv({ cls: "mytasks-construtor-filtro-card" });
 		new ConstrutorFiltro(divFiltro, {
 			app: this.app,
 			configuracoes: this.configuracoes,
@@ -114,7 +115,7 @@ export class ModalEditarVisualizacaoSalva extends Modal {
 			this.atualizarCodigoEmbed();
 		}
 
-		new Setting(contentEl).addButton((btn) =>
+		new Setting(contentEl).setClass("mytasks-modal-acao").addButton((btn) =>
 			btn
 				.setButtonText("Salvar")
 				.setCta()

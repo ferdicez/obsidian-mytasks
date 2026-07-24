@@ -46,7 +46,7 @@ type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "nota" | "fi
 const PAGINAS: { id: PaginaConfig; rotulo: string }[] = [
 	{ id: "geral", rotulo: "Geral" },
 	{ id: "calendario", rotulo: "Calendário" },
-	{ id: "kanban", rotulo: "kanban" },
+	{ id: "kanban", rotulo: "Kanban" },
 	{ id: "tarefas", rotulo: "Tarefas" },
 	{ id: "nota", rotulo: "Nota de tarefa" },
 	{ id: "filtros", rotulo: "Filtros" },
@@ -651,7 +651,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		obter: () => string | null,
 		definir: (caminho: string | null) => void
 	): void {
-		const setting = new Setting(container).setName(nome).setDesc(descricao);
+		const setting = new Setting(container).setClass("mytasks-nota-modelo-busca").setName(nome).setDesc(descricao);
 
 		setting.addSearch((search) => {
 			const caminhoAtual = obter();
@@ -1141,16 +1141,18 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private renderizarDestaque(container: HTMLElement, propriedadeId: string, obterOpcoes: () => OpcaoSelecao[]) {
-		const caixa = container.createDiv({ cls: "mytasks-cores-caixa" });
-
 		if (obterOpcoes().length === 0) {
-			caixa.createEl("p", {
+			const caixaVazia = container.createDiv({ cls: "mytasks-cores-caixa" });
+			caixaVazia.createEl("p", {
 				text: "Cadastre ao menos uma opção com cor acima para poder usá-la como destaque visual da tarefa.",
 				cls: "setting-item-description",
 			});
 			return;
 		}
 
+		// Divisória de seção antes de "Destaque colorido", igual às demais seções da página (Data de conclusão etc.).
+		container.createEl("hr", { cls: "mytasks-config-divisoria" });
+		const caixa = container.createDiv({ cls: "mytasks-cores-caixa" });
 		caixa.createEl("h4", { text: "Destaque colorido", cls: "mytasks-destaque-titulo" });
 
 		const destaques = this.grupo.destaques;

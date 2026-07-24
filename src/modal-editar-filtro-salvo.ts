@@ -27,6 +27,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.addClass("mytasks-modal-filtro");
+		contentEl.addClass("mytasks-modal-cards");
 		contentEl.createEl("h2", { text: this.filtroExistente ? "Editar filtro" : "Novo filtro" });
 
 		new Setting(contentEl).setName("Nome").addText((text) =>
@@ -34,7 +35,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 		);
 
 		contentEl.createEl("h3", { text: "Condições" });
-		const divFiltro = contentEl.createDiv();
+		const divFiltro = contentEl.createDiv({ cls: "mytasks-construtor-filtro-card" });
 		new ConstrutorFiltro(divFiltro, {
 			app: this.app,
 			configuracoes: this.configuracoes,
@@ -43,7 +44,7 @@ export class ModalEditarFiltroSalvo extends Modal {
 			aoMudar: (raiz) => (this.raiz = raiz),
 		});
 
-		new Setting(contentEl).addButton((btn) =>
+		new Setting(contentEl).setClass("mytasks-modal-acao").addButton((btn) =>
 			btn
 				.setButtonText("Salvar")
 				.setCta()

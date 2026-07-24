@@ -6,6 +6,9 @@ import {
 	REGEX_HORARIO,
 	Tarefa,
 	arquivoEhTarefaRelevante,
+	campoPodeSerOpcional,
+	campoVisivelNaNota,
+	idsTemplateNotaDisponiveis,
 	opcaoStatusComData,
 	primeiraOpcaoStatus,
 	ultimaOpcaoStatus,
@@ -212,9 +215,15 @@ export class RepositorioTarefas {
 		const arquivo = await this.app.vault.create(caminho, "");
 		const config = this.obterConfiguracoes();
 		const { propriedades, dataTarefa, chavesFixas } = config;
-		// Campos marcados "opcionais" em Configurações → Nota de tarefa não nascem pré-gravados quando vazios
-		// (a chave só passa a existir quando ela adiciona pela nota). Ver campoEhOpcional/escreverFrontmatter.
+		// Campos que NÃO nascem pré-gravados no frontmatter: (a) marcados "Opcional" — a chave só existe quando
+		// ela adiciona pela nota; e (b) marcados "Oculto" — se ela escondeu o campo, não faz sentido ele nascer
+		// no frontmatter (era o bug: "oculto" só sumia da geração de código, mas a chave ainda era pré-gravada).
+		// Só vale pros campos opcionalizáveis — status/prazo (essenciais) nascem sempre, mesmo ocultos, pra não
+		// sumir das views. Ver escreverFrontmatter.
 		const camposOpcionais = new Set(config.templateNota.camposOpcionais ?? []);
+		for (const id of idsTemplateNotaDisponiveis(config)) {
+			if (campoPodeSerOpcional(id) && !campoVisivelNaNota(config, id)) camposOpcionais.add(id);
+		}
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			// Ordem pedida pela Fernanda: 1) grupo, 2) entrada, 3) prazo, 4) propriedades customizadas
 			// (as duas últimas são gravadas dentro de escreverFrontmatter). A ordem de inserção das

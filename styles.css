@@ -1265,3 +1265,63 @@
 	background: transparent;
 	color: var(--text-normal);
 }
+
+/* Cards nos modais (popups). A página de Configurações é um PluginSettingTab, que o Obsidian já renderiza
+   com cada .setting-item como um "card" (fundo/borda/arredondado). Modais não herdam isso — aqui replicamos
+   o mesmo visual pros .setting-item diretos de um contêiner marcado .mytasks-modal-cards, pra que as janelas
+   popup fiquem com a mesma cara de card da tela de Configurações. */
+.mytasks-modal-cards .setting-item {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--gt-raio, 10px);
+	padding: 12px 16px;
+	margin-bottom: 10px;
+}
+
+/* Um cabeçalho de seção (<h3>) dentro do modal não vira card — fica como título solto acima dos cards. */
+.mytasks-modal-cards h3 {
+	background: transparent;
+	border: none;
+	padding: 0;
+	margin: 18px 0 8px;
+}
+
+/* O setting do botão de ação (ex: "Salvar") não vira card — fica solto, com o botão alinhado à direita. */
+.mytasks-modal-cards .setting-item.mytasks-modal-acao {
+	background: transparent;
+	border: none;
+	padding: 8px 0 0;
+	margin-bottom: 0;
+	justify-content: flex-end;
+}
+
+/* Grupo de filtro agrupado num card só: o construtor de filtro inteiro (raiz + condições + subgrupos)
+   vive dentro de um único card, em vez de cada condição solta. A borda de indentação interna de cada
+   subgrupo continua vindo de .mytasks-construtor-filtro. */
+.mytasks-modal-cards .mytasks-construtor-filtro-card {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--gt-raio, 10px);
+	padding: 12px 16px;
+	margin-bottom: 10px;
+}
+
+/* Dentro do card do filtro, o primeiro nível do construtor não precisa da margem/borda de indentação
+   (o card já delimita) — a indentação fica só pros subgrupos aninhados. */
+.mytasks-modal-cards .mytasks-construtor-filtro-card > .mytasks-construtor-filtro {
+	margin: 0;
+	padding-left: 0;
+	border-left: none;
+}
+
+/* Espaçamento entre os cards de código na seção "Códigos para colar" (Configurações → Nota de tarefa). */
+.mytasks-embed-bloco + .mytasks-embed-bloco {
+	margin-top: 10px;
+}
+
+/* Barra de busca da "Nota modelo" / "Nota modelo (Inbox)" — cerca do dobro da largura padrão. */
+.mytasks-nota-modelo-busca input[type="search"],
+.mytasks-nota-modelo-busca input[type="text"] {
+	width: 320px;
+	max-width: 100%;
+}

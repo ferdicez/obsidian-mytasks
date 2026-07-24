@@ -25,6 +25,7 @@ export class ModalEditarGrupo extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
+		contentEl.addClass("mytasks-modal-cards");
 		contentEl.createEl("h3", { text: "Grupo de tarefas" });
 
 		new Setting(contentEl)
@@ -59,7 +60,7 @@ export class ModalEditarGrupo extends Modal {
 		previewIcone = settingIcone.controlEl.createSpan({ cls: "mytasks-config-grupo-icone" });
 		setIcon(previewIcone, this.dados.icone);
 
-		new Setting(contentEl).addButton((btn) =>
+		new Setting(contentEl).setClass("mytasks-modal-acao").addButton((btn) =>
 			btn
 				.setButtonText("Salvar")
 				.setCta()

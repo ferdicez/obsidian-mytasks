@@ -82,6 +82,7 @@ export class ModalNovaTarefa extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
+		contentEl.addClass("mytasks-modal-cards");
 		contentEl.createEl("h2", { text: this.tarefaExistente ? "Editar tarefa" : "Nova tarefa" });
 
 		new Setting(contentEl).setName("Título").addText((text) =>
@@ -186,7 +187,7 @@ export class ModalNovaTarefa extends Modal {
 
 	private desenharAcaoPrincipal(areaAcoes: HTMLElement): void {
 		areaAcoes.empty();
-		const setting = new Setting(areaAcoes).addButton((btn) =>
+		const setting = new Setting(areaAcoes).setClass("mytasks-modal-acao").addButton((btn) =>
 			btn
 				.setButtonText(this.tarefaExistente ? "Salvar" : "Criar tarefa")
 				.setCta()

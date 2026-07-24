@@ -47,6 +47,7 @@ export class ModalEditarPropriedade extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
+		contentEl.addClass("mytasks-modal-cards");
 		contentEl.createEl("h2", { text: this.propriedadeExistente ? "Editar propriedade" : "Nova propriedade" });
 
 		new Setting(contentEl).setName("Nome").addText((text) =>
@@ -100,7 +101,7 @@ export class ModalEditarPropriedade extends Modal {
 		});
 		divArquivosFixos.toggle(this.tipo === "link_arquivo");
 
-		new Setting(contentEl).addButton((btn) =>
+		new Setting(contentEl).setClass("mytasks-modal-acao").addButton((btn) =>
 			btn
 				.setButtonText("Salvar")
 				.setCta()
