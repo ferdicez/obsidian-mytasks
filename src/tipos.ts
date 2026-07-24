@@ -632,9 +632,13 @@ export function campoVisivelNaNota(config: ConfigEfetivaGrupo, campoId: string):
 	return lista.includes(campoId);
 }
 
-export function emPeriodoDeAviso(tarefa: Tarefa, hoje: Date): boolean {
-	if (!tarefa.data) return false;
-	if (!tarefa.diasAntecedenciaAviso || tarefa.diasAntecedenciaAviso <= 0) return false;
+// "antecedencia" = já entrou no período de aviso, mas o prazo ainda não chegou (visual mais claro).
+// "prazo" = hoje é o dia do prazo (visual cheio). null = fora do período de aviso.
+export type FaseAviso = "antecedencia" | "prazo";
+
+export function faseDeAviso(tarefa: Tarefa, hoje: Date): FaseAviso | null {
+	if (!tarefa.data) return null;
+	if (!tarefa.diasAntecedenciaAviso || tarefa.diasAntecedenciaAviso <= 0) return null;
 
 	const [ano, mes, dia] = tarefa.data.split("-").map(Number);
 	const dataTarefa = new Date(ano, mes - 1, dia);
@@ -642,5 +646,10 @@ export function emPeriodoDeAviso(tarefa: Tarefa, hoje: Date): boolean {
 	dataAviso.setDate(dataAviso.getDate() - tarefa.diasAntecedenciaAviso);
 
 	const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-	return hojeSemHora >= dataAviso && hojeSemHora <= dataTarefa;
+	if (hojeSemHora < dataAviso || hojeSemHora > dataTarefa) return null;
+	return hojeSemHora.getTime() === dataTarefa.getTime() ? "prazo" : "antecedencia";
+}
+
+export function emPeriodoDeAviso(tarefa: Tarefa, hoje: Date): boolean {
+	return faseDeAviso(tarefa, hoje) !== null;
 }

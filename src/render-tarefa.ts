@@ -6,7 +6,7 @@ import {
 	PropriedadeDefinida,
 	Tarefa,
 	corDeDestaquePorEstilo,
-	emPeriodoDeAviso,
+	faseDeAviso,
 	ultimaOpcaoStatus,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
@@ -73,7 +73,7 @@ export function desenharCartaoTarefa(
 
 	const concluido = ultimaOpcaoStatus(configuracoes.status);
 	const estaConcluida = tarefa.status === concluido;
-	const emAviso = !estaConcluida && emPeriodoDeAviso(tarefa, new Date());
+	const fase = estaConcluida ? null : faseDeAviso(tarefa, new Date());
 
 	const item = container.createDiv({ cls: "mytasks-item" });
 	if (estaConcluida) item.addClass("mytasks-item-feito");
@@ -87,11 +87,18 @@ export function desenharCartaoTarefa(
 		});
 		item.addEventListener("dragend", () => item.removeClass("mytasks-item-arrastando"));
 	}
-	if (emAviso) {
+	if (fase === "prazo") {
+		// Dia do prazo: destaque cheio (fundo + borda lateral).
 		item.addClass("mytasks-item-aviso");
 		item.addClass("mytasks-item-borda-reta");
 		item.style.backgroundColor = corComOpacidade(configuracoes.corAviso, 0.18);
 		item.style.borderLeft = `3px solid ${configuracoes.corAviso}`;
+	} else if (fase === "antecedencia") {
+		// Dias de antecedência (antes do prazo): só um tingido bem leve, sem borda —
+		// parece uma tarefa normal, mas já sinaliza que o prazo está chegando.
+		item.addClass("mytasks-item-aviso");
+		item.addClass("mytasks-item-antecedencia");
+		item.style.backgroundColor = corComOpacidade(configuracoes.corAviso, 0.07);
 	}
 
 	// "borda" agora é uma bolinha colorida no fim do título (desenhada mais abaixo, junto ao título) —

@@ -193,6 +193,12 @@
 	border-radius: 6px;
 }
 
+/* Dias de antecedência (antes do prazo): sem borda lateral, então os 4 cantos ficam
+   arredondados. O fundo bem claro é aplicado inline em render-tarefa.ts. */
+.mytasks-item-antecedencia {
+	border-left: none;
+}
+
 .mytasks-titulo {
 	transition: color 0.15s ease;
 }
