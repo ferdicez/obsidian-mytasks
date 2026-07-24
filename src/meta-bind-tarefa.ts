@@ -12,6 +12,13 @@ function opcaoMetaBind(valor: string, rotulo: string): string {
 	return `option(${valorOpcaoMetaBind(valor)}, ${valorOpcaoMetaBind(rotulo)})`;
 }
 
+// Variante que grava valor e rótulo CRUS (sem aspas), mesmo com espaços — usada no suggester de arquivo,
+// onde a forma esperada é option([[ws - pamela]], ws - pamela). O Meta Bind aceita o wikilink e o rótulo
+// com espaços sem aspas nesse contexto; passá-los por valorOpcaoMetaBind envolveria em aspas (indesejado).
+function opcaoMetaBindCru(valor: string, rotulo: string): string {
+	return `option(${valor}, ${rotulo})`;
+}
+
 function campoInlineSelect(chave: string, opcoes: OpcaoSelecao[]): string {
 	const partes = opcoes.map((o) => opcaoMetaBind(o.valor, o.valor));
 	return `INPUT[inlineSelect(${partes.join(", ")}):${chave}]`;
@@ -104,9 +111,9 @@ function campoPropriedade(
 					const arquivo = app.vault.getAbstractFileByPath(caminho);
 					const nome = arquivo?.name.replace(/\.md$/, "") ?? caminho;
 					// O VALOR gravado precisa ser um wikilink [[nome]] — é a única forma que o Obsidian
-					// reconhece como frontmatterLink (o que `extrairArquivoLinkado` lê). O rótulo mostrado
-					// no suggester continua sendo só o nome legível.
-					return opcaoMetaBind(`[[${nome}]]`, nome);
+					// reconhece como frontmatterLink (o que `extrairArquivoLinkado` lê). Valor e rótulo saem
+					// CRUS (sem aspas), na forma option([[ws - pamela]], ws - pamela) que ela pediu.
+					return opcaoMetaBindCru(`[[${nome}]]`, nome);
 				});
 				return { id: def.id, rotulo: def.rotulo, codigo: `INPUT[suggester(${partes.join(", ")}):${def.id}]`, inline: true, chave: def.id, valorInicialBotao: "null" };
 			}
