@@ -11,8 +11,9 @@ export interface SufixoCaptura {
 	alias: string;
 }
 
-// Separa "gravar reels - pamela" em { titulo: "gravar reels", alias: "pamela" }.
-// Devolve null quando não há sufixo no formato esperado — aí o título segue inteiro.
+// Separa "gravar reels - pamela" em { titulo: "gravar reels", alias: "pamela" } — só para descobrir QUAL é
+// o alias digitado. O título da tarefa NÃO é cortado (o nome do arquivo mantém o sufixo); quem chama usa
+// apenas o campo `alias`. Devolve null quando não há sufixo no formato esperado.
 export function separarSufixoAlias(entrada: string): SufixoCaptura | null {
 	const casou = entrada.match(REGEX_SUFIXO_ALIAS);
 	if (!casou) return null;

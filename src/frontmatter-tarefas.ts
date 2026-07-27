@@ -17,9 +17,6 @@ export function extrairArquivoLinkado(app: App, arquivo: TFile, propriedadeId: s
 
 export interface DadosTarefaEscrita {
 	status: string;
-	// Sufixo " - fulano" da captura rápida (ver Tarefa.sufixoTitulo). Ausente/null nos demais fluxos de
-	// criação e na edição — a chave só nasce quando há sufixo de verdade.
-	sufixoTitulo?: string | null;
 	data: string | null;
 	horario: string | null;
 	recorrencia: Recorrencia;
@@ -86,12 +83,6 @@ export function escreverFrontmatter(
 	}
 
 	fm[chaveStatus] = dados.status;
-
-	// Sufixo do título: gravado só quando existe (não é um campo que a usuária preenche na nota, e tarefa
-	// sem sufixo não deve carregar a chave vazia). `undefined` = quem chamou não sabe do sufixo (edição pelo
-	// modal, conclusão, próxima ocorrência) e a chave é PRESERVADA como está; só `null` explícito apaga.
-	if (dados.sufixoTitulo) fm[chavesFixas.sufixoTitulo] = dados.sufixoTitulo;
-	else if (dados.sufixoTitulo === null && !criando) delete fm[chavesFixas.sufixoTitulo];
 
 	// Campos opcionais e vazios na criação são pulados (ehOpcional só é true quando `criando`) — a chave
 	// não nasce. `horario` também sai de fora quando opcional mesmo com REGEX ok só se não vier valor.

@@ -129,11 +129,6 @@ export function desenharCartaoTarefa(
 	const info = item.createDiv({ cls: "mytasks-info" });
 	const linhaTitulo = info.createDiv({ cls: "mytasks-titulo-linha" });
 	const titulo = linhaTitulo.createEl("span", { text: tarefa.titulo, cls: "mytasks-titulo" });
-	// Sufixo " - fulano" da captura rápida: fica fora do nome do arquivo, mas continua visível aqui, logo
-	// depois do título (em tom mais apagado, por ser identificação e não o nome da tarefa).
-	if (tarefa.sufixoTitulo) {
-		linhaTitulo.createEl("span", { text: ` - ${tarefa.sufixoTitulo}`, cls: "mytasks-titulo-sufixo" });
-	}
 	// Destaque "bolinha": um pontinho colorido logo após o título, com a cor da propriedade escolhida.
 	if (corBolinha) {
 		const bolinha = linhaTitulo.createSpan({ cls: "mytasks-bolinha-destaque" });

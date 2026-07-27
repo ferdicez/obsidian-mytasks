@@ -147,7 +147,6 @@ export class RepositorioTarefas {
 		return {
 			caminho: arquivo.path,
 			titulo: arquivo.basename,
-			sufixoTitulo: typeof fm[chavesFixas.sufixoTitulo] === "string" ? (fm[chavesFixas.sufixoTitulo] as string) : null,
 			status: valorStatus as string,
 			valorGrupo: typeof valorGrupoBruto === "string" ? valorGrupoBruto : null,
 			statusAnterior: typeof fm[chavesFixas.statusAnterior] === "string" ? (fm[chavesFixas.statusAnterior] as string) : null,
@@ -250,19 +249,14 @@ export class RepositorioTarefas {
 
 		// Sufixo " - fulano": procura, SÓ entre as notas cadastradas em "Arquivos fixos" das propriedades do
 		// tipo link de arquivo, uma cujo nome/aliases casem — e herda dela as propriedades que TAMBÉM estão
-		// cadastradas no plugin (interseção — ver alias-captura.ts). Sem match, o título fica inteiro e nada
-		// é preenchido: uma tarefa com traço legítimo no nome nunca é mutilada.
-		let tituloFinal = titulo;
-		let sufixoTitulo: string | null = null;
+		// cadastradas no plugin (interseção — ver alias-captura.ts). O TÍTULO NÃO É CORTADO: a tarefa se chama
+		// "gravar reels - soie.md" mesmo, o sufixo é identificação visual e fica no nome do arquivo. Sem match,
+		// nada é preenchido — uma tarefa com traço legítimo no nome nasce igual a antes.
 		let propriedades: Record<string, PropriedadeValor> = {};
 		const sufixo = separarSufixoAlias(titulo);
 		if (sufixo) {
 			const encontrada = resolverNotaPorAlias(this.app, sufixo.alias, config.propriedades);
 			if (encontrada) {
-				// O nome do ARQUIVO fica limpo ("gravar reels.md"); o sufixo é guardado à parte e reexibido
-				// depois do título nos cards — some do arquivo, não some da tela.
-				tituloFinal = sufixo.titulo;
-				sufixoTitulo = sufixo.alias;
 				propriedades = herdarPropriedadesDaNota(this.app, encontrada.arquivo, config.propriedades);
 				// A(s) propriedade(s) que cadastraram esta nota em "Arquivos fixos" recebem o link pra ela
 				// própria (ex: cadastrada em "pasta" → `pasta: [[cliente - soie]]`). Vem DEPOIS da herança
@@ -272,12 +266,11 @@ export class RepositorioTarefas {
 					new Notice(`"${sufixo.alias}" casa com ${encontrada.ambiguas.length + 1} notas — usando "${encontrada.arquivo.basename}".`);
 				}
 			} else {
-				new Notice(`Nenhuma nota cadastrada com alias "${sufixo.alias}" — título mantido inteiro.`);
+				new Notice(`Nenhuma nota cadastrada com alias "${sufixo.alias}" — nada preenchido.`);
 			}
 		}
 
-		const arquivo = await this.criarTarefa(tituloFinal, {
-			sufixoTitulo,
+		const arquivo = await this.criarTarefa(titulo, {
 			status: primeiraOpcaoStatus(config.status) ?? "",
 			data: null,
 			horario: null,
