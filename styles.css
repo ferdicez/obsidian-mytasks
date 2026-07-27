@@ -480,6 +480,30 @@
 	text-decoration: underline;
 }
 
+/* Sufixo " - fulano" da captura rápida: colado no título (anula o gap de 6px da linha, já que o próprio
+   texto começa com espaço) e em tom apagado, por ser identificação e não o nome da tarefa. Herda o
+   font-size do título pra acompanhar os tamanhos diferentes de sidebar/aba/calendário. */
+.mytasks-titulo-sufixo {
+	margin-left: -6px;
+	color: var(--text-muted);
+	font-size: 0.95em;
+	white-space: nowrap;
+}
+
+.mytasks-container:not(.mytasks-container-aba) .mytasks-titulo-sufixo {
+	font-size: 0.85em;
+}
+
+.mytasks-calendario-celula-hora .mytasks-titulo-sufixo,
+.mytasks-calendario-celula-dia-inteiro .mytasks-titulo-sufixo,
+.mytasks-calendario-coluna-dia .mytasks-titulo-sufixo {
+	font-size: 1.09em;
+}
+
+.mytasks-item-feito .mytasks-titulo-sufixo {
+	text-decoration: line-through;
+}
+
 .mytasks-meta {
 	font-size: 0.75em;
 	color: var(--text-muted);

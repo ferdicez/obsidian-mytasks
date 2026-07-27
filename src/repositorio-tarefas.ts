@@ -147,6 +147,7 @@ export class RepositorioTarefas {
 		return {
 			caminho: arquivo.path,
 			titulo: arquivo.basename,
+			sufixoTitulo: typeof fm[chavesFixas.sufixoTitulo] === "string" ? (fm[chavesFixas.sufixoTitulo] as string) : null,
 			status: valorStatus as string,
 			valorGrupo: typeof valorGrupoBruto === "string" ? valorGrupoBruto : null,
 			statusAnterior: typeof fm[chavesFixas.statusAnterior] === "string" ? (fm[chavesFixas.statusAnterior] as string) : null,
@@ -252,13 +253,21 @@ export class RepositorioTarefas {
 		// cadastradas no plugin (interseção — ver alias-captura.ts). Sem match, o título fica inteiro e nada
 		// é preenchido: uma tarefa com traço legítimo no nome nunca é mutilada.
 		let tituloFinal = titulo;
+		let sufixoTitulo: string | null = null;
 		let propriedades: Record<string, PropriedadeValor> = {};
 		const sufixo = separarSufixoAlias(titulo);
 		if (sufixo) {
 			const encontrada = resolverNotaPorAlias(this.app, sufixo.alias, config.propriedades);
 			if (encontrada) {
+				// O nome do ARQUIVO fica limpo ("gravar reels.md"); o sufixo é guardado à parte e reexibido
+				// depois do título nos cards — some do arquivo, não some da tela.
 				tituloFinal = sufixo.titulo;
+				sufixoTitulo = sufixo.alias;
 				propriedades = herdarPropriedadesDaNota(this.app, encontrada.arquivo, config.propriedades);
+				// A(s) propriedade(s) que cadastraram esta nota em "Arquivos fixos" recebem o link pra ela
+				// própria (ex: cadastrada em "pasta" → `pasta: [[cliente - soie]]`). Vem DEPOIS da herança
+				// pra vencer um valor herdado do frontmatter da nota na mesma chave.
+				for (const id of encontrada.propriedadesDeOrigem) propriedades[id] = encontrada.arquivo.path;
 				if (encontrada.ambiguas.length > 0) {
 					new Notice(`"${sufixo.alias}" casa com ${encontrada.ambiguas.length + 1} notas — usando "${encontrada.arquivo.basename}".`);
 				}
@@ -268,6 +277,7 @@ export class RepositorioTarefas {
 		}
 
 		const arquivo = await this.criarTarefa(tituloFinal, {
+			sufixoTitulo,
 			status: primeiraOpcaoStatus(config.status) ?? "",
 			data: null,
 			horario: null,

@@ -42,29 +42,41 @@ function aliasesDaNota(app: App, arquivo: TFile): string[] {
 
 export interface ResultadoAlias {
 	arquivo: TFile;
+	// Ids das propriedades `link_arquivo` que têm esta nota nos seus "Arquivos fixos" — são elas que recebem
+	// o link pra própria nota encontrada (ex: a nota está cadastrada em "pasta" → a tarefa nasce com
+	// `pasta: [[cliente - soie]]`). Normalmente uma só; mais de uma se a nota estiver em várias listas.
+	propriedadesDeOrigem: string[];
 	// Outras notas que também casaram com o mesmo alias (quem chama avisa a usuária). Vazio no caso normal.
 	ambiguas: TFile[];
+}
+
+interface NotaCadastrada {
+	arquivo: TFile;
+	propriedades: string[];
 }
 
 // Universo de busca da captura por alias: SÓ as notas cadastradas em "Arquivos fixos" das propriedades do
 // tipo `link_arquivo`. Não varre o vault inteiro — a usuária pré-cadastra quais notas participam, então uma
 // nota qualquer com nome coincidente nunca é capturada por acidente (e a busca fica barata).
 // Propriedade `link_arquivo` sem arquivos fixos (busca livre no vault) não entra: não define uma lista.
-function notasCadastradas(app: App, definicoes: PropriedadeDefinida[]): TFile[] {
-	const vistos = new Set<string>();
-	const notas: TFile[] = [];
+// Guarda de qual(is) propriedade(s) cada nota veio, pra depois preencher essa propriedade com o link.
+function notasCadastradas(app: App, definicoes: PropriedadeDefinida[]): NotaCadastrada[] {
+	const porCaminho = new Map<string, NotaCadastrada>();
 	for (const def of definicoes) {
 		if (def.tipo !== "link_arquivo" || !def.arquivosFixos) continue;
 		for (const caminho of def.arquivosFixos) {
-			if (vistos.has(caminho)) continue;
-			vistos.add(caminho);
+			const existente = porCaminho.get(caminho);
+			if (existente) {
+				existente.propriedades.push(def.id);
+				continue;
+			}
 			const arquivo = app.vault.getAbstractFileByPath(caminho);
 			// Caminho que aponta pra nota apagada/movida é ignorado em silêncio (mesma tolerância que
 			// meta-bind-tarefa e modal-nova-tarefa já têm com arquivosFixos órfãos).
-			if (arquivo instanceof TFile) notas.push(arquivo);
+			if (arquivo instanceof TFile) porCaminho.set(caminho, { arquivo, propriedades: [def.id] });
 		}
 	}
-	return notas;
+	return [...porCaminho.values()];
 }
 
 // Procura, entre as notas cadastradas em "Arquivos fixos", uma cujo NOME ou cujos `aliases` casem com o
@@ -73,21 +85,25 @@ export function resolverNotaPorAlias(app: App, alias: string, definicoes: Propri
 	const alvo = normalizar(alias);
 	if (!alvo) return null;
 
-	const porAlias: TFile[] = [];
-	const porNome: TFile[] = [];
-	for (const arquivo of notasCadastradas(app, definicoes)) {
-		if (aliasesDaNota(app, arquivo).some((a) => normalizar(a) === alvo)) {
-			porAlias.push(arquivo);
+	const porAlias: NotaCadastrada[] = [];
+	const porNome: NotaCadastrada[] = [];
+	for (const cadastrada of notasCadastradas(app, definicoes)) {
+		if (aliasesDaNota(app, cadastrada.arquivo).some((a) => normalizar(a) === alvo)) {
+			porAlias.push(cadastrada);
 			continue;
 		}
-		if (normalizar(arquivo.basename) === alvo) porNome.push(arquivo);
+		if (normalizar(cadastrada.arquivo.basename) === alvo) porNome.push(cadastrada);
 	}
 
 	// Alias explícito ganha de coincidência de nome de arquivo: se a usuária cadastrou `aliases: [pamela]`
 	// numa nota, é essa que ela quer, mesmo que exista outra nota chamada literalmente "pamela.md".
 	const candidatas = porAlias.length > 0 ? porAlias : porNome;
 	if (candidatas.length === 0) return null;
-	return { arquivo: candidatas[0], ambiguas: candidatas.slice(1) };
+	return {
+		arquivo: candidatas[0].arquivo,
+		propriedadesDeOrigem: candidatas[0].propriedades,
+		ambiguas: candidatas.slice(1).map((c) => c.arquivo),
+	};
 }
 
 // Monta os valores de propriedade a herdar da nota do "fulano". A regra é a INTERSEÇÃO entre o que a nota

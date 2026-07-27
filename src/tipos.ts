@@ -213,6 +213,8 @@ export interface ChavesFixas {
 	statusAnterior: string;
 	ocorrenciaAnterior: string;
 	proximaOcorrencia: string;
+	// Sufixo " - fulano" da captura rápida, guardado à parte do nome do arquivo (ver Tarefa.sufixoTitulo).
+	sufixoTitulo: string;
 }
 
 export const CHAVES_FIXAS_PADRAO: ChavesFixas = {
@@ -225,6 +227,7 @@ export const CHAVES_FIXAS_PADRAO: ChavesFixas = {
 	statusAnterior: "status_anterior",
 	ocorrenciaAnterior: "ocorrencia_anterior",
 	proximaOcorrencia: "proxima_ocorrencia",
+	sufixoTitulo: "sufixo_titulo",
 };
 
 export interface CampoTemplateFixo {
@@ -429,6 +432,9 @@ export type PropriedadeValor = string | string[] | null;
 export interface Tarefa {
 	caminho: string;
 	titulo: string;
+	// Sufixo " - fulano" digitado na captura rápida: fica FORA do nome do arquivo (que segue limpo) e é
+	// exibido depois do título nos cards. Null = tarefa sem sufixo (todas as criadas por outros caminhos).
+	sufixoTitulo: string | null;
 	status: string;
 	statusAnterior: string | null;
 	data: string | null;
