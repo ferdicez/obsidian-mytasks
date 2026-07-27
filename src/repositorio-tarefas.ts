@@ -1,4 +1,4 @@
-import { App, TFile, TFolder, normalizePath, parseYaml } from "obsidian";
+import { App, Notice, TFile, TFolder, normalizePath, parseYaml } from "obsidian";
 import {
 	ConfigEfetivaGrupo,
 	PropriedadeValor,
@@ -15,6 +15,7 @@ import {
 } from "./tipos";
 import { DadosTarefaEscrita, escreverFrontmatter, formatarLinkArquivo, lerFrontmatter } from "./frontmatter-tarefas";
 import { gerarCorpoMetaBind } from "./meta-bind-tarefa";
+import { herdarPropriedadesDaNota, resolverNotaPorAlias, separarSufixoAlias } from "./alias-captura";
 
 function formatarData(data: Date): string {
 	const ano = data.getFullYear();
@@ -245,7 +246,28 @@ export class RepositorioTarefas {
 
 	async criarTarefaRapida(titulo: string): Promise<TFile> {
 		const config = this.obterConfiguracoes();
-		const arquivo = await this.criarTarefa(titulo, {
+
+		// Sufixo " - fulano": procura, SÓ entre as notas cadastradas em "Arquivos fixos" das propriedades do
+		// tipo link de arquivo, uma cujo nome/aliases casem — e herda dela as propriedades que TAMBÉM estão
+		// cadastradas no plugin (interseção — ver alias-captura.ts). Sem match, o título fica inteiro e nada
+		// é preenchido: uma tarefa com traço legítimo no nome nunca é mutilada.
+		let tituloFinal = titulo;
+		let propriedades: Record<string, PropriedadeValor> = {};
+		const sufixo = separarSufixoAlias(titulo);
+		if (sufixo) {
+			const encontrada = resolverNotaPorAlias(this.app, sufixo.alias, config.propriedades);
+			if (encontrada) {
+				tituloFinal = sufixo.titulo;
+				propriedades = herdarPropriedadesDaNota(this.app, encontrada.arquivo, config.propriedades);
+				if (encontrada.ambiguas.length > 0) {
+					new Notice(`"${sufixo.alias}" casa com ${encontrada.ambiguas.length + 1} notas — usando "${encontrada.arquivo.basename}".`);
+				}
+			} else {
+				new Notice(`Nenhuma nota cadastrada com alias "${sufixo.alias}" — título mantido inteiro.`);
+			}
+		}
+
+		const arquivo = await this.criarTarefa(tituloFinal, {
 			status: primeiraOpcaoStatus(config.status) ?? "",
 			data: null,
 			horario: null,
@@ -253,7 +275,7 @@ export class RepositorioTarefas {
 			manterHistorico: true,
 			recorrenciaDataFim: null,
 			diasAntecedenciaAviso: null,
-			propriedades: {},
+			propriedades,
 		});
 
 		// A captura rápida nasce sempre no Inbox — aplica o mesmo corpo de nota modelo que "Nova tarefa" usa
