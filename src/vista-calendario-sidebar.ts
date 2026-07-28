@@ -50,7 +50,8 @@ export class VistaCalendarioSidebar extends ItemView {
 			app: this.app,
 			repositorio: this.plugin.repositorioDoGrupo(grupo.id),
 			configuracoes: configEfetiva,
-			modoInicial: "semana-kanban",
+			// "semana-horarios" é a chave histórica do modo "Dia" (ver tipos.ts).
+			modoInicial: "semana-horarios",
 			filtroInicialId: configEfetiva.filtroPadraoCalendarioId,
 			filtro: (t) => tarefaPertenceAoGrupo(t, grupo, this.plugin.configuracoes),
 			configuracoesGlobais: this.plugin.configuracoes,

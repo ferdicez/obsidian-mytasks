@@ -951,6 +951,17 @@
 	border-top: none;
 }
 
+/* A linha de :30 é subdivisão da hora, não início de hora nova: divisória tracejada e mais discreta,
+   e o rótulo apagado, pra hora cheia continuar sendo a referência de leitura da coluna. */
+.mytasks-calendario-linha-meia-hora {
+	border-top-style: dashed;
+	border-top-color: var(--background-modifier-border);
+}
+
+.mytasks-calendario-linha-meia-hora .mytasks-calendario-rotulo-hora {
+	opacity: 0.55;
+}
+
 .mytasks-calendario-rotulo-hora {
 	font-size: 0.68em;
 	color: var(--text-faint);

@@ -6,10 +6,12 @@ export type TipoPropriedade = "texto" | "selecao" | "data" | "link_arquivo" | "l
 // mas o id técnico é preservado pra não invalidar data.json nem Visualizações salvas já existentes.
 export type ModoCalendario = "mes" | "semana-horarios" | "semana-kanban" | "ano";
 
+// A ordem das chaves aqui é a ordem em que os modos aparecem no seletor do calendário
+// e na tela de Configurações (dia → semana → mês → ano).
 export const ROTULOS_MODO: Record<ModoCalendario, string> = {
-	mes: "Mês",
 	"semana-horarios": "Dia",
 	"semana-kanban": "Semana",
+	mes: "Mês",
 	ano: "Ano",
 };
 

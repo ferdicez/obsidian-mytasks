@@ -12,7 +12,6 @@ import {
 	obterFiltroSalvo,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
-import { ModalNovaTarefa } from "./modal-nova-tarefa";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA, OpcoesCartaoTarefa } from "./render-tarefa";
 import { compilarFiltro } from "./motor-filtro";
 import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
@@ -23,25 +22,29 @@ export type { ModoCalendario };
 const NOMES_DIA_SEMANA_COMPLETO = [
 	"Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado",
 ];
+// Sempre em minúsculas: o calendário mostra o nome do mês em caixa baixa em todas as views
+// (rótulo do período em Dia/Semana/Mês e os títulos dos mini-meses do modo Ano).
 const NOMES_MES = [
-	"Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-	"Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+	"janeiro", "fevereiro", "março", "abril", "maio", "junho",
+	"julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 ];
 
 const LARGURA_MINIMA_COLUNA = 130;
 const ALTURA_MINIMA_HORA = 48;
-// No modo "Dia" cada linha de hora recebe uma tarefa inteira (não só um traço de referência),
-// então respira bem mais que a altura de hora usada nas outras grades.
-const ALTURA_HORA_MODO_DIA = 140;
+// No modo "Dia" cada linha recebe uma tarefa inteira (não só um traço de referência), então respira
+// bem mais que a altura de hora usada nas outras grades. Como a faixa passou a ter duas linhas por
+// hora (:00 e :30), este valor é a altura de CADA meia hora — ainda cabe um cartão de tarefa inteiro.
+const ALTURA_HORA_MODO_DIA = 92;
 
-// Modo "Dia": faixas fixas do dia. Cada faixa vira uma coluna com uma linha por hora,
-// de horaInicial até horaFinal inclusive (noite vai até 23:00, fechando o dia às 00:00).
+// Modo "Dia": faixas fixas do dia. Cada faixa vira uma coluna com duas linhas por hora (:00 e :30),
+// de horaInicial até horaFinal inclusive (noite vai até 23:30, fechando o dia às 00:00).
 const FAIXAS_DIA: { titulo: string; horaInicial: number; horaFinal: number }[] = [
 	{ titulo: "manhã", horaInicial: 6, horaFinal: 11 },
 	{ titulo: "tarde", horaInicial: 12, horaFinal: 17 },
 	{ titulo: "noite", horaInicial: 18, horaFinal: 23 },
 ];
-const HORAS_POR_FAIXA = Math.max(...FAIXAS_DIA.map((f) => f.horaFinal - f.horaInicial + 1));
+// Linhas por faixa: duas por hora (:00 e :30).
+const HORAS_POR_FAIXA = Math.max(...FAIXAS_DIA.map((f) => (f.horaFinal - f.horaInicial + 1) * 2));
 
 export interface OpcoesMotorCalendario {
 	app: App;
@@ -251,7 +254,7 @@ export class MotorCalendario {
 		if (this.modo === "semana-horarios") {
 			const dia = this.dataReferencia;
 			const nomeDia = NOMES_DIA_SEMANA_COMPLETO[dia.getDay()].toLowerCase();
-			const nomeMes = NOMES_MES[dia.getMonth()].toLowerCase();
+			const nomeMes = NOMES_MES[dia.getMonth()];
 			return `${nomeDia}, ${dia.getDate()} de ${nomeMes} de ${dia.getFullYear()}`;
 		}
 		const inicio = inicioSemana(this.dataReferencia);
@@ -286,22 +289,18 @@ export class MotorCalendario {
 			elemento.addClass("mytasks-calendario-alvo-soltura");
 		});
 		elemento.addEventListener("dragleave", () => elemento.removeClass("mytasks-calendario-alvo-soltura"));
-		elemento.addEventListener("drop", (evento) => {
+		// Soltar grava direto no frontmatter (data e, quando o alvo tem horário, a propriedade de
+		// horário) — sem abrir modal. `horario` undefined = alvo sem hora (mês/semana), preserva o
+		// horário que a tarefa já tinha; `null` = coluna "sem horário", remove a propriedade.
+		elemento.addEventListener("drop", async (evento) => {
 			const caminho = evento.dataTransfer?.getData(FORMATO_DRAG_TAREFA);
 			elemento.removeClass("mytasks-calendario-alvo-soltura");
 			if (!caminho) return;
 			evento.preventDefault();
 			const tarefa = this.opcoes.repositorio.listarTarefas().find((t) => t.caminho === caminho);
 			if (!tarefa) return;
-			new ModalNovaTarefa(
-				this.opcoes.app,
-				this.opcoes.configuracoes,
-				this.opcoes.repositorio,
-				() => {},
-				{ data, horario: horario ?? undefined },
-				tarefa,
-				() => this.renderizar()
-			).open();
+			await this.opcoes.repositorio.atualizarData(tarefa, data, horario);
+			this.renderizar();
 		});
 	}
 
@@ -486,28 +485,35 @@ export class MotorCalendario {
 
 			const corpoFaixa = coluna.createDiv({ cls: "mytasks-calendario-corpo-faixa" });
 
+			// Duas linhas por hora: cheia (:00) e meia (:30), todas com o mesmo espaçamento de 30 min.
 			for (let hora = faixa.horaInicial; hora <= faixa.horaFinal; hora++) {
-				const linha = corpoFaixa.createDiv({ cls: "mytasks-calendario-linha-hora" });
-				const horarioClique = `${String(hora).padStart(2, "0")}:00`;
-				linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: horarioClique });
+				for (const minuto of [0, 30]) {
+					const linha = corpoFaixa.createDiv({ cls: "mytasks-calendario-linha-hora" });
+					if (minuto === 30) linha.addClass("mytasks-calendario-linha-meia-hora");
+					const horarioClique = `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
+					linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: horarioClique });
 
-				const celulaHora = linha.createDiv({ cls: "mytasks-calendario-celula-hora" });
-				const tarefasHora = tarefasDoDia.filter((t) => {
-					if (!t.horario) return false;
-					return parseInt(t.horario.split(":")[0], 10) === hora;
-				});
-				for (const tarefa of tarefasHora) {
-					desenharCartaoTarefa(
-						celulaHora,
-						this.opcoes.app,
-						this.opcoes.repositorio,
-						this.opcoes.configuracoes,
-						tarefa,
-						this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
-					);
+					const celulaHora = linha.createDiv({ cls: "mytasks-calendario-celula-hora" });
+					// Cada tarefa cai numa única linha: minuto < 30 na linha cheia, >= 30 na de meia hora.
+					const tarefasHora = tarefasDoDia.filter((t) => {
+						if (!t.horario) return false;
+						const [h, m] = t.horario.split(":").map((parte) => parseInt(parte, 10));
+						if (h !== hora) return false;
+						return minuto === 0 ? !(m >= 30) : m >= 30;
+					});
+					for (const tarefa of tarefasHora) {
+						desenharCartaoTarefa(
+							celulaHora,
+							this.opcoes.app,
+							this.opcoes.repositorio,
+							this.opcoes.configuracoes,
+							tarefa,
+							this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
+						);
+					}
+					celulaHora.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr, horarioClique));
+					this.registrarAlvoDeSoltura(celulaHora, diaStr, horarioClique);
 				}
-				celulaHora.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr, horarioClique));
-				this.registrarAlvoDeSoltura(celulaHora, diaStr, horarioClique);
 			}
 		}
 	}
