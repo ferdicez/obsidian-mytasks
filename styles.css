@@ -675,11 +675,10 @@
 	border-radius: inherit;
 }
 
-/* Respiro no topo, entre a moldura e a linha dos dias da semana (a Semana (dias) tem esse espaço via
-   o padding das colunas; a Semana (horários) não tinha nenhum). Só margin-top pra não desalinhar as
-   colunas das 3 grades empilhadas (elas precisam do mesmo grid-template-columns sem padding lateral). */
-.mytasks-calendario-grade-area-vertical .mytasks-calendario-cabecalho-semana-horarios {
-	margin-top: 8px;
+/* Última coluna (sábado) da Semana: sem o separador interno à direita — a borda externa da
+   moldura já fecha o quadro ali, então esse traço interno virava uma linha dupla. */
+.mytasks-calendario-ultima-coluna {
+	border-right: none;
 }
 
 /* Mês */
@@ -831,7 +830,7 @@
 	height: 100%;
 	min-height: 0;
 	/* Sem moldura externa (border-left/top/radius) — as colunas usam só o separador border-right
-	   entre elas, igual à view "Semana (horários)", pra as linhas laterais ficarem com a mesma margem. */
+	   entre elas, igual à view "Dia", pra as linhas laterais ficarem com a mesma margem. */
 	overflow: hidden;
 }
 
@@ -878,96 +877,88 @@
 	font-weight: 700;
 }
 
-/* Semana - com horários */
+/* Dia — 4 colunas: sem horário | manhã | tarde | noite */
 
-.mytasks-calendario-cabecalho-semana-horarios {
+/* As quatro colunas dividem a largura igualmente e rolam JUNTAS (a rolagem é do grade-area em volta),
+   pra que as linhas de hora das três faixas fiquem sempre alinhadas entre si na tela. */
+.mytasks-calendario-grade-dia {
 	display: grid;
-	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
-	padding-bottom: 8px;
-	margin-bottom: 4px;
-	border-bottom: 2px solid var(--gt-borda-coluna);
-	overflow-y: hidden;
-	scrollbar-gutter: stable;
-}
-
-.mytasks-calendario-cabecalho-semana-horarios .mytasks-calendario-cabecalho-coluna {
-	border-right: 1px solid var(--gt-borda-coluna);
-	border-bottom: none;
-	padding-bottom: 0;
-	margin-bottom: 0;
-}
-
-/* Última coluna (sábado) do cabeçalho da Semana (horários): sem o separador à direita.
-   Seletor mais específico que a regra base pra vencer o border-right do cabeçalho acima. */
-.mytasks-calendario-cabecalho-semana-horarios .mytasks-calendario-cabecalho-coluna.mytasks-calendario-ultima-coluna {
-	border-right: none;
-}
-
-.mytasks-calendario-faixa-dia-inteiro {
-	display: grid;
-	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
-	padding-bottom: 3px;
-	margin-bottom: 2px;
-	border-bottom: 2px solid var(--gt-borda-coluna);
-	overflow-y: hidden;
-	scrollbar-gutter: stable;
-}
-
-.mytasks-calendario-rotulo-faixa {
-	font-size: 0.68em;
-	color: var(--text-faint);
-	/* Centralizado na coluna de 56px. text-align (não flex) porque o "Dia" é um nó de texto solto —
-	   justify-content não centraliza texto puro de forma confiável. */
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	text-align: center;
-}
-
-.mytasks-calendario-celula-dia-inteiro {
-	min-height: 24px;
-	/* Quando um dia acumula muitas tarefas sem horário, essa célula rola por conta própria em vez de
-	   cortar (a faixa "dia inteiro" em volta tem overflow-y: hidden) as que não cabem. */
-	max-height: 96px;
-	overflow-y: auto;
-	padding: 2px;
-	background: var(--background-primary);
-	border-right: 1px solid var(--gt-borda-coluna);
-}
-
-/* Última coluna de dias (semana horários): sem o separador interno à direita — a borda externa da
-   moldura já fecha o quadro ali, então esse traço interno virava uma linha dupla. */
-.mytasks-calendario-ultima-coluna {
-	border-right: none;
-}
-
-.mytasks-calendario-scroll-horas {
-	overflow-y: auto;
-	scrollbar-gutter: stable;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	/* align-content: start impede o grid de esticar as colunas até o fim da área rolável quando o
+	   conteúdo é mais curto que ela — sem isso sobra um bloco vazio embaixo das linhas de hora. */
+	align-content: start;
 	flex: 1;
 	min-height: 0;
-	/* Espaço no topo pra o 1º rótulo de hora (07:00), que é deslocado pra cima com translateY e
-	   ficava cortado na borda superior da área de rolagem. */
-	padding-top: 0.7em;
+	overflow: auto;
 }
 
-.mytasks-calendario-grade-horas {
+.mytasks-calendario-coluna-faixa {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	border-right: 1px solid var(--gt-borda-coluna);
+}
+
+/* A moldura externa do grade-area já fecha o quadro à direita — sem isso vira linha dupla. */
+.mytasks-calendario-coluna-faixa:last-child {
+	border-right: none;
+}
+
+/* Título da coluna gruda no topo durante a rolagem, pra não se perder de qual faixa é cada coluna. */
+.mytasks-calendario-titulo-faixa {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 8px 6px 6px;
+	text-align: center;
+	font-size: 0.82em;
+	font-weight: 600;
+	color: var(--text-muted);
+	background: var(--background-primary);
+	border-bottom: 2px solid var(--gt-borda-coluna);
+}
+
+/* Coluna "sem horário": estica até o fim da coluna (que já tem a altura das faixas), então as quatro
+   colunas terminam alinhadas embaixo mesmo quando o dia tem poucas tarefas soltas. */
+.mytasks-calendario-corpo-sem-horario {
+	flex: 1;
+	padding: 6px 5px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-calendario-corpo-sem-horario:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mytasks-calendario-corpo-faixa {
+	display: flex;
+	flex-direction: column;
+}
+
+/* Cada hora é uma linha de altura fixa: rótulo estreito à esquerda, célula solta à direita. */
+.mytasks-calendario-linha-hora {
 	display: grid;
-	grid-template-columns: 56px repeat(var(--mytasks-num-colunas, 7), minmax(130px, 1fr));
-	grid-auto-rows: var(--mytasks-altura-hora, 48px);
+	grid-template-columns: 46px minmax(0, 1fr);
+	height: var(--mytasks-altura-hora, 48px);
+	border-top: 1px solid var(--gt-borda-fraca);
+}
+
+/* A primeira linha da faixa encosta no título (que já traz a própria borda inferior). */
+.mytasks-calendario-linha-hora:first-child {
+	border-top: none;
 }
 
 .mytasks-calendario-rotulo-hora {
 	font-size: 0.68em;
 	color: var(--text-faint);
 	text-align: right;
-	padding-right: 6px;
-	transform: translateY(-0.6em);
+	padding: 5px 8px 0 0;
 }
 
 .mytasks-calendario-celula-hora {
-	border-top: 1px solid var(--gt-borda-fraca);
-	border-right: 1px solid var(--gt-borda-coluna);
 	padding: 2px 5px;
 	/* Quando muitas tarefas caem na mesma hora, a célula rola por conta própria em vez de simplesmente
 	   cortar (overflow: hidden) as que não cabem na altura fixa da linha da grade. */
@@ -979,18 +970,12 @@
 	transition: background-color 0.15s ease;
 }
 
-/* Última coluna (sábado): célula de hora sem o separador à direita. Seletor de 2 classes
-   pra vencer o border-right da regra base acima (que empata em especificidade com .ultima-coluna). */
-.mytasks-calendario-celula-hora.mytasks-calendario-ultima-coluna {
-	border-right: none;
-}
-
 .mytasks-calendario-celula-hora:hover {
 	background: var(--background-modifier-hover);
 }
 
 .mytasks-calendario-celula-hora .mytasks-item,
-.mytasks-calendario-celula-dia-inteiro .mytasks-item {
+.mytasks-calendario-corpo-sem-horario .mytasks-item {
 	padding: 3px 5px;
 	border-radius: 5px;
 	font-size: 0.78em;
@@ -1000,12 +985,12 @@
 }
 
 .mytasks-calendario-celula-hora .mytasks-titulo,
-.mytasks-calendario-celula-dia-inteiro .mytasks-titulo {
+.mytasks-calendario-corpo-sem-horario .mytasks-titulo {
 	font-size: 1.09em;
 }
 
 .mytasks-calendario-celula-hora .mytasks-meta,
-.mytasks-calendario-celula-dia-inteiro .mytasks-meta {
+.mytasks-calendario-corpo-sem-horario .mytasks-meta {
 	font-size: 0.96em;
 }
 

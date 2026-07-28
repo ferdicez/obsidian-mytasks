@@ -2,12 +2,14 @@ export type Recorrencia = "nenhuma" | "diaria" | "a_cada_2_dias" | "a_cada_3_dia
 
 export type TipoPropriedade = "texto" | "selecao" | "data" | "link_arquivo" | "lista";
 
+// A chave "semana-horarios" é histórica: o modo virou "Dia" (um dia só, dividido em manhã/tarde/noite),
+// mas o id técnico é preservado pra não invalidar data.json nem Visualizações salvas já existentes.
 export type ModoCalendario = "mes" | "semana-horarios" | "semana-kanban" | "ano";
 
 export const ROTULOS_MODO: Record<ModoCalendario, string> = {
 	mes: "Mês",
-	"semana-horarios": "Semana (horários)",
-	"semana-kanban": "Semana (dias)",
+	"semana-horarios": "Dia",
+	"semana-kanban": "Semana",
 	ano: "Ano",
 };
 

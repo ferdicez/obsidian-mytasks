@@ -30,8 +30,18 @@ const NOMES_MES = [
 
 const LARGURA_MINIMA_COLUNA = 130;
 const ALTURA_MINIMA_HORA = 48;
-const HORA_INICIAL_GRADE = 7;
-const HORA_FINAL_GRADE = 22;
+// No modo "Dia" cada linha de hora recebe uma tarefa inteira (não só um traço de referência),
+// então respira bem mais que a altura de hora usada nas outras grades.
+const ALTURA_HORA_MODO_DIA = 140;
+
+// Modo "Dia": faixas fixas do dia. Cada faixa vira uma coluna com uma linha por hora,
+// de horaInicial até horaFinal inclusive (noite vai até 23:00, fechando o dia às 00:00).
+const FAIXAS_DIA: { titulo: string; horaInicial: number; horaFinal: number }[] = [
+	{ titulo: "manhã", horaInicial: 6, horaFinal: 11 },
+	{ titulo: "tarde", horaInicial: 12, horaFinal: 17 },
+	{ titulo: "noite", horaInicial: 18, horaFinal: 23 },
+];
+const HORAS_POR_FAIXA = Math.max(...FAIXAS_DIA.map((f) => f.horaFinal - f.horaInicial + 1));
 
 export interface OpcoesMotorCalendario {
 	app: App;
@@ -224,6 +234,8 @@ export class MotorCalendario {
 		const nova = new Date(this.dataReferencia);
 		if (this.modo === "mes") nova.setMonth(nova.getMonth() + direcao);
 		else if (this.modo === "ano") nova.setFullYear(nova.getFullYear() + direcao);
+		// Modo "Dia" mostra um único dia: as setas andam de dia em dia, não de semana em semana.
+		else if (this.modo === "semana-horarios") nova.setDate(nova.getDate() + direcao);
 		else nova.setDate(nova.getDate() + direcao * 7);
 		this.dataReferencia = nova;
 		this.renderizar();
@@ -235,6 +247,12 @@ export class MotorCalendario {
 		}
 		if (this.modo === "ano") {
 			return String(this.dataReferencia.getFullYear());
+		}
+		if (this.modo === "semana-horarios") {
+			const dia = this.dataReferencia;
+			const nomeDia = NOMES_DIA_SEMANA_COMPLETO[dia.getDay()].toLowerCase();
+			const nomeMes = NOMES_MES[dia.getMonth()].toLowerCase();
+			return `${nomeDia}, ${dia.getDate()} de ${nomeMes} de ${dia.getFullYear()}`;
 		}
 		const inicio = inicioSemana(this.dataReferencia);
 		const fim = new Date(inicio);
@@ -415,74 +433,68 @@ export class MotorCalendario {
 		}
 	}
 
-	// ---------- Modo Semana (com horários) ----------
+	// ---------- Modo Dia (sem horário + manhã/tarde/noite) ----------
 
+	// Quatro colunas lado a lado para UM dia: a primeira reúne as tarefas do dia ainda sem horário
+	// (arrastar dali para uma faixa é o gesto de agendar), e as outras três são as faixas fixas do dia,
+	// cada uma com uma linha por hora. As quatro rolam juntas numa área só.
 	private desenharSemanaComHorarios(container: HTMLElement): void {
-		const numColunas = this.colunasVisiveis();
 		const tarefas = this.tarefasFiltradas();
-		const inicio = inicioSemana(this.dataReferencia);
-		const hojeStr = formatarData(new Date());
+		const diaStr = formatarData(this.dataReferencia);
+		const ehHoje = diaStr === formatarData(new Date());
 
-		const dias: { data: Date; diaStr: string }[] = [];
-		for (let i = 0; i < numColunas; i++) {
-			const dia = new Date(inicio);
-			dia.setDate(dia.getDate() + i);
-			dias.push({ data: dia, diaStr: formatarData(dia) });
+		const tarefasDoDia = tarefas.filter((t) => t.data === diaStr);
+
+		const grade = container.createDiv({ cls: "mytasks-calendario-grade-dia" });
+		if (ehHoje) grade.addClass("mytasks-calendario-hoje");
+		grade.style.setProperty("--mytasks-altura-hora", `${ALTURA_HORA_MODO_DIA}px`);
+		// Todas as colunas de faixa têm o mesmo número de linhas de hora, então a coluna "sem horário"
+		// pode ocupar exatamente essa altura e as quatro terminam alinhadas.
+		grade.style.setProperty("--mytasks-horas-por-faixa", String(HORAS_POR_FAIXA));
+
+		// --- Coluna 1: tarefas do dia sem horário definido ---
+		const colunaSemHorario = grade.createDiv({ cls: "mytasks-calendario-coluna-faixa mytasks-calendario-coluna-sem-horario" });
+		colunaSemHorario.createDiv({ cls: "mytasks-calendario-titulo-faixa", text: "sem horário" });
+
+		const corpoSemHorario = colunaSemHorario.createDiv({ cls: "mytasks-calendario-corpo-sem-horario" });
+		// Também recolhe aqui quem tem horário fora das faixas (madrugada, 00:00–05:00): sem isso
+		// a tarefa não teria célula nenhuma e sumiria da tela.
+		const semHorario = tarefasDoDia.filter((t) => {
+			if (!t.horario) return true;
+			const hora = parseInt(t.horario.split(":")[0], 10);
+			if (Number.isNaN(hora)) return true;
+			return !FAIXAS_DIA.some((f) => hora >= f.horaInicial && hora <= f.horaFinal);
+		});
+		for (const tarefa of semHorario) {
+			desenharCartaoTarefa(
+				corpoSemHorario,
+				this.opcoes.app,
+				this.opcoes.repositorio,
+				this.opcoes.configuracoes,
+				tarefa,
+				this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
+			);
 		}
+		corpoSemHorario.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
+		// horario: null → soltar aqui remove o horário da tarefa (desagenda, volta a ser só "do dia").
+		this.registrarAlvoDeSoltura(corpoSemHorario, diaStr, null);
 
-		// Cabeçalho de dias
-		const cabecalhoDias = container.createDiv({ cls: "mytasks-calendario-cabecalho-semana-horarios" });
-		cabecalhoDias.style.setProperty("--mytasks-num-colunas", String(numColunas));
-		cabecalhoDias.createDiv();
-		dias.forEach(({ data, diaStr }, indice) => {
-			const cabecalhoDia = cabecalhoDias.createDiv({ cls: "mytasks-calendario-cabecalho-coluna" });
-			if (indice === dias.length - 1) cabecalhoDia.addClass("mytasks-calendario-ultima-coluna");
-			if (diaStr === hojeStr) cabecalhoDia.addClass("mytasks-calendario-hoje");
-			cabecalhoDia.createEl("span", {
-				text: String(data.getDate()).padStart(2, "0"),
-				cls: "mytasks-calendario-numero-dia",
-			});
-			cabecalhoDia.createEl("span", { text: "|", cls: "mytasks-calendario-separador-cabecalho" });
-			cabecalhoDia.createEl("span", { text: NOMES_DIA_SEMANA_COMPLETO[data.getDay()].toLowerCase() });
-		});
+		// --- Colunas 2 a 4: manhã, tarde e noite, uma linha por hora ---
+		for (const faixa of FAIXAS_DIA) {
+			const coluna = grade.createDiv({ cls: "mytasks-calendario-coluna-faixa" });
+			coluna.createDiv({ cls: "mytasks-calendario-titulo-faixa", text: faixa.titulo });
 
-		// Faixa "dia inteiro"
-		const faixaDiaInteiro = container.createDiv({ cls: "mytasks-calendario-faixa-dia-inteiro" });
-		faixaDiaInteiro.style.setProperty("--mytasks-num-colunas", String(numColunas));
-		faixaDiaInteiro.createDiv({ cls: "mytasks-calendario-rotulo-faixa", text: "Dia" });
-		dias.forEach(({ diaStr }, indice) => {
-			const celula = faixaDiaInteiro.createDiv({ cls: "mytasks-calendario-celula-dia-inteiro" });
-			if (indice === dias.length - 1) celula.addClass("mytasks-calendario-ultima-coluna");
-			const tarefasSemHorario = tarefas.filter((t) => t.data === diaStr && !t.horario);
-			for (const tarefa of tarefasSemHorario) {
-				desenharCartaoTarefa(
-					celula,
-					this.opcoes.app,
-					this.opcoes.repositorio,
-					this.opcoes.configuracoes,
-					tarefa,
-					this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
-				);
-			}
-			celula.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
-			this.registrarAlvoDeSoltura(celula, diaStr, null);
-		});
+			const corpoFaixa = coluna.createDiv({ cls: "mytasks-calendario-corpo-faixa" });
 
-		// Grade de horas
-		const areaScroll = container.createDiv({ cls: "mytasks-calendario-scroll-horas" });
-		const gradeHoras = areaScroll.createDiv({ cls: "mytasks-calendario-grade-horas" });
-		gradeHoras.style.setProperty("--mytasks-num-colunas", String(numColunas));
-		gradeHoras.style.setProperty("--mytasks-altura-hora", `${ALTURA_MINIMA_HORA}px`);
+			for (let hora = faixa.horaInicial; hora <= faixa.horaFinal; hora++) {
+				const linha = corpoFaixa.createDiv({ cls: "mytasks-calendario-linha-hora" });
+				const horarioClique = `${String(hora).padStart(2, "0")}:00`;
+				linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: horarioClique });
 
-		for (let hora = HORA_INICIAL_GRADE; hora <= HORA_FINAL_GRADE; hora++) {
-			gradeHoras.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: `${String(hora).padStart(2, "0")}:00` });
-			dias.forEach(({ diaStr }, indice) => {
-				const celulaHora = gradeHoras.createDiv({ cls: "mytasks-calendario-celula-hora" });
-				if (indice === dias.length - 1) celulaHora.addClass("mytasks-calendario-ultima-coluna");
-				const tarefasHora = tarefas.filter((t) => {
-					if (t.data !== diaStr || !t.horario) return false;
-					const horaTarefa = parseInt(t.horario.split(":")[0], 10);
-					return horaTarefa === hora;
+				const celulaHora = linha.createDiv({ cls: "mytasks-calendario-celula-hora" });
+				const tarefasHora = tarefasDoDia.filter((t) => {
+					if (!t.horario) return false;
+					return parseInt(t.horario.split(":")[0], 10) === hora;
 				});
 				for (const tarefa of tarefasHora) {
 					desenharCartaoTarefa(
@@ -494,10 +506,9 @@ export class MotorCalendario {
 						this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
 					);
 				}
-				const horarioClique = `${String(hora).padStart(2, "0")}:00`;
 				celulaHora.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr, horarioClique));
 				this.registrarAlvoDeSoltura(celulaHora, diaStr, horarioClique);
-			});
+			}
 		}
 	}
 

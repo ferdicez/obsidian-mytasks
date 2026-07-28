@@ -28,6 +28,8 @@ class EmbedKanban extends MarkdownRenderChild {
 			filtrosExtrasIds: compilado.filtrosExtrasIds,
 			filtroInicialId: compilado.filtroExtraPadraoId,
 			permitirTrocaAgrupamento: false,
+			// Embed é uma visualização dentro da nota: o "nova tarefa" fica só nas views de verdade.
+			permitirCriarTarefa: false,
 		});
 	}
 

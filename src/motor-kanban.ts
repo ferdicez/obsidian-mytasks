@@ -29,6 +29,7 @@ export interface OpcoesMotorKanban {
 	filtroInicialId?: string | null;
 	permitirTrocaAgrupamento?: boolean;
 	permitirEdicaoFiltro?: boolean;
+	permitirCriarTarefa?: boolean;
 	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
 	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento da Lista/Kanban geral).
 	filtrosExtrasIds?: string[];
@@ -197,14 +198,16 @@ export class MotorKanban {
 			});
 		}
 
-		const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
-		const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
-		setIcon(iconeNova, "square-plus");
-		botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
-		botaoNova.addEventListener("click", async () => {
-			const arquivo = await this.opcoes.repositorio.criarTarefaEmBranco();
-			this.renderizar();
-			this.opcoes.app.workspace.openLinkText(arquivo.path, "", false);
-		});
+		if (this.opcoes.permitirCriarTarefa !== false) {
+			const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
+			const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
+			setIcon(iconeNova, "square-plus");
+			botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
+			botaoNova.addEventListener("click", async () => {
+				const arquivo = await this.opcoes.repositorio.criarTarefaEmBranco();
+				this.renderizar();
+				this.opcoes.app.workspace.openLinkText(arquivo.path, "", false);
+			});
+		}
 	}
 }
