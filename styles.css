@@ -51,6 +51,13 @@
 	margin-bottom: 12px;
 }
 
+/* Altura única de todos os controles de cabeçalho (botões, seletores e o bloco de abas), pra
+   ficarem alinhados independentemente de conterem ícone, texto ou pastilhas internas. */
+.mytasks-cabecalho,
+.mytasks-calendario-cabecalho {
+	--mytasks-altura-controle: 30px;
+}
+
 .mytasks-cabecalho h3 {
 	margin: 0;
 	margin-right: auto;
@@ -66,12 +73,15 @@
 	cursor: pointer;
 }
 
+/* Altura casada com o bloco de abas (.mytasks-calendario-abas-modo). Não dá pra confiar só no
+   padding: estes botões têm ícones SVG (13px) e as abas têm só texto, então o conteúdo mede
+   diferente. --mytasks-altura-controle fixa a altura dos dois e o padding vertical vira 0. */
 .mytasks-cabecalho > button,
-.mytasks-seletor-discreto,
-.mytasks-calendario-seletor-modo {
-	padding: 6px 12px !important;
+.mytasks-seletor-discreto {
+	height: var(--mytasks-altura-controle);
+	padding: 0 12px !important;
 	background: var(--background-modifier-border) !important;
-	border: none !important;
+	border: 1px solid transparent !important;
 	box-shadow: none !important;
 	border-radius: 8px !important;
 	font-size: 0.85em !important;
@@ -80,17 +90,12 @@
 	transition: background-color 0.15s ease;
 }
 
-.mytasks-calendario-seletor-modo {
-	border: 1px solid var(--gt-borda);
-}
-
 .mytasks-botao-nova-tarefa {
 	text-transform: lowercase;
 }
 
 .mytasks-cabecalho > button:hover,
-.mytasks-seletor-discreto:hover,
-.mytasks-calendario-seletor-modo:hover {
+.mytasks-seletor-discreto:hover {
 	background: var(--background-modifier-hover);
 }
 
@@ -103,11 +108,16 @@
 	margin-bottom: 8px;
 }
 
+/* Mesmo bloco das abas de visualização: altura única do cabeçalho, borda (transparente aqui, que
+   este bloco não tem moldura visível) entrando na conta pra casar com os botões ao lado. */
 .mytasks-toggle-inbox {
 	display: flex;
+	align-items: center;
 	gap: 2px;
+	height: var(--mytasks-altura-controle);
 	background: var(--background-modifier-border);
-	border-radius: 6px;
+	border: 1px solid transparent;
+	border-radius: 8px;
 	padding: 2px;
 	margin-right: auto;
 }
@@ -116,11 +126,12 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	height: 100%;
 	border: none;
 	background: transparent;
-	padding: 3px 10px;
+	padding: 0 10px;
 	font-size: 0.82em;
-	border-radius: 4px;
+	border-radius: 6px;
 	color: var(--text-muted);
 	box-shadow: none;
 }
@@ -129,6 +140,7 @@
 	background: var(--background-primary);
 	color: var(--text-normal);
 	font-weight: 600;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .mytasks-toggle-inbox button svg {
@@ -400,8 +412,7 @@
 	font-size: 0.85em;
 }
 
-.mytasks-seletor-discreto,
-.mytasks-calendario-seletor-modo {
+.mytasks-seletor-discreto {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
@@ -604,14 +615,62 @@
 	gap: 6px;
 }
 
-.mytasks-calendario-seletor-modo {
+/* Abas de visualização (dia · semana · mês · ano): um bloco cinza único (mesma moldura da
+   navegação "Hoje") em que a aba ativa é uma pastilha branca elevada e as inativas ficam
+   rentes ao fundo do bloco.
+   Apesar do prefixo "calendario-", estas classes também são usadas pelo seletor de agrupamento
+   do Kanban (SeletorAgrupamento com apresentacao: "abas") — o visual é o mesmo. */
+.mytasks-calendario-abas-modo {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: var(--mytasks-altura-controle);
+	/* Mesmo cinza dos outros botões do cabeçalho (não o --background-secondary, que em vários temas
+	   fica quase igual ao --background-primary da pastilha ativa e apagava o contraste). */
+	background: var(--background-modifier-border);
+	border: 1px solid var(--gt-borda);
+	border-radius: 8px;
+	padding: 2px;
+}
+
+.mytasks-calendario-aba-modo {
+	/* Preenche a altura do bloco (menos os 2px de padding dele em cima e embaixo). */
+	height: 100%;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 12px !important;
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	border-radius: 6px !important;
+	font-size: 0.85em !important;
+	font-weight: 500 !important;
+	color: var(--text-muted) !important;
+	text-transform: lowercase;
+	white-space: nowrap;
 	cursor: pointer;
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mytasks-calendario-aba-modo:hover {
+	color: var(--text-normal) !important;
+}
+
+/* A pastilha ativa é o único elemento com fundo claro dentro do bloco — a sombra sutil dá o
+   relevo que separa ela do cinza em volta. */
+.mytasks-calendario-aba-modo-ativa,
+.mytasks-calendario-aba-modo-ativa:hover {
+	background: var(--background-primary) !important;
+	color: var(--text-normal) !important;
+	font-weight: 600 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
 }
 
 .mytasks-calendario-navegacao {
 	display: flex;
 	align-items: center;
 	gap: 2px;
+	height: var(--mytasks-altura-controle);
 	background: var(--background-secondary);
 	border: 1px solid var(--gt-borda);
 	border-radius: 8px;
@@ -620,7 +679,8 @@
 
 .mytasks-calendario-navegacao button {
 	cursor: pointer;
-	padding: 4px 10px;
+	height: 100%;
+	padding: 0 10px;
 	background: transparent;
 	border: none;
 	box-shadow: none;
@@ -653,16 +713,15 @@
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
-	/* Moldura arredondada única para TODAS as views (mês, semana dias, semana horários, ano) — mesmo
-	   "quadro" que o Kanban tem. Moldura completa (4 lados) pra o canto arredondar limpo e a última
-	   coluna não estourar à direita. */
+	/* Moldura base comum a todas as views. Hoje todas aplicam também a variante "aberta" abaixo —
+	   esta regra é que define a espessura (e portanto as medidas) que a variante preserva. */
 	border: 1px solid var(--gt-borda-fraca);
 	border-radius: var(--gt-raio);
 }
 
-/* Nas duas visões semanais, preserva a espessura da moldura (e portanto todas as medidas), mas
-   deixa as laterais e a base invisíveis. O topo continua visível e reto, sem cantos curvados. */
-.mytasks-calendario-grade-area-semana {
+/* Em todas as views, preserva a espessura da moldura (e portanto todas as medidas), mas deixa as
+   laterais e a base invisíveis. O topo continua visível e reto, sem cantos curvados. */
+.mytasks-calendario-grade-area-aberta {
 	border-color: var(--gt-borda-fraca) transparent transparent;
 	border-radius: 0;
 }
@@ -760,14 +819,6 @@
 .mytasks-calendario-hoje .mytasks-calendario-numero-dia {
 	color: var(--interactive-accent);
 	font-weight: 700;
-}
-
-.mytasks-calendario-separador-cabecalho {
-	color: var(--text-faint);
-}
-
-.mytasks-calendario-hoje .mytasks-calendario-cabecalho-coluna .mytasks-calendario-separador-cabecalho {
-	color: var(--interactive-accent);
 }
 
 .mytasks-calendario-lista-dia {
@@ -1022,8 +1073,11 @@
 
 .mytasks-calendario-grade-ano {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	/* 12 meses em 3 linhas de 4 — layout fixo, não depende da largura disponível. */
+	grid-template-columns: repeat(4, 1fr);
 	gap: 20px;
+	/* Respiro entre os mini-meses e a moldura do grade-area (que encosta nos quatro lados). */
+	padding: 20px 20px 16px;
 }
 
 .mytasks-calendario-mini-mes h4 {
@@ -1031,6 +1085,7 @@
 	font-size: 0.82em;
 	font-weight: 600;
 	color: var(--text-normal);
+	text-align: center;
 }
 
 .mytasks-calendario-mini-grade {
@@ -1104,7 +1159,8 @@
 	overflow-y: auto;
 	border-top: 1px solid var(--gt-borda-fraca);
 	border-left: 1px solid var(--gt-borda-fraca);
-	border-radius: var(--gt-raio);
+	/* Cantos retos: as bordas continuam as mesmas, só sem arredondamento. */
+	border-radius: 0;
 }
 
 .mytasks-kanban-coluna {

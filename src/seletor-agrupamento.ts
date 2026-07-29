@@ -10,6 +10,9 @@ export interface OpcoesSeletorAgrupamento {
 	// Elemento cuja borda esquerda define onde o menu abre (ex: o cabeçalho inteiro, pra descer sempre
 	// alinhado com o início da coluna, independente de qual botão foi clicado). Sem isso, usa o próprio botão.
 	elementoAlinhamento?: HTMLElement;
+	// "abas" desenha as opções lado a lado num bloco único (igual às visualizações do Calendário),
+	// em vez do botão com menu suspenso. Só vale quando a lista de opções é curta.
+	apresentacao?: "menu" | "abas";
 }
 
 export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: ConfigEfetivaGrupo): string {
@@ -37,11 +40,19 @@ export function opcoesDeAgrupamento(
 }
 
 export class SeletorAgrupamento {
-	private botao: HTMLButtonElement;
+	// Só existe na apresentação "menu"; em "abas" o seletor desenha uma pastilha por opção.
+	private botao: HTMLButtonElement | null = null;
+	// Só preenchido na apresentação "abas": permite mover a marcação de ativa sem redesenhar tudo.
+	private abas = new Map<TipoAgrupamento, HTMLButtonElement>();
 	private agrupamentoAtual: TipoAgrupamento;
 
 	constructor(private container: HTMLElement, private opcoes: OpcoesSeletorAgrupamento) {
 		this.agrupamentoAtual = opcoes.agrupamentoAtual;
+
+		if (opcoes.apresentacao === "abas") {
+			this.desenharAbas();
+			return;
+		}
 
 		this.botao = container.createEl("button", {
 			cls: "mytasks-seletor-discreto mytasks-seletor-so-icone",
@@ -53,6 +64,37 @@ export class SeletorAgrupamento {
 		setIcon(chevron, "chevrons-up-down");
 
 		this.botao.addEventListener("click", () => this.abrirMenu());
+	}
+
+	// Mesmo bloco visual das visualizações do Calendário: container cinza único, a opção ativa
+	// virando uma pastilha clara. Reusa as classes .mytasks-calendario-abas-modo/-aba-modo.
+	private desenharAbas(): void {
+		const abas = this.container.createDiv({
+			cls: "mytasks-calendario-abas-modo mytasks-abas-agrupamento",
+		});
+
+		for (const agrupamento of this.opcoesValidas()) {
+			const aba = abas.createEl("button", {
+				cls: "mytasks-calendario-aba-modo",
+				text: rotuloAgrupamento(agrupamento, this.opcoes.configuracoes),
+			});
+			this.abas.set(agrupamento, aba);
+			if (agrupamento === this.agrupamentoAtual) aba.addClass("mytasks-calendario-aba-modo-ativa");
+			aba.addEventListener("click", () => {
+				if (agrupamento === this.agrupamentoAtual) return;
+				this.agrupamentoAtual = agrupamento;
+				// O seletor move a marcação sozinho: quem chama pode redesenhar só o corpo da view
+				// (o Kanban redesenha a grade, não o cabeçalho) e a pastilha ativa continua certa.
+				this.marcarAbaAtiva();
+				this.opcoes.aoEscolher(agrupamento);
+			});
+		}
+	}
+
+	private marcarAbaAtiva(): void {
+		for (const [agrupamento, aba] of this.abas) {
+			aba.toggleClass("mytasks-calendario-aba-modo-ativa", agrupamento === this.agrupamentoAtual);
+		}
 	}
 
 	private opcoesValidas(): TipoAgrupamento[] {
@@ -75,6 +117,7 @@ export class SeletorAgrupamento {
 					})
 			);
 		}
+		if (!this.botao) return;
 		const retanguloBotao = this.botao.getBoundingClientRect();
 		const x = (this.opcoes.elementoAlinhamento ?? this.botao).getBoundingClientRect().left;
 		menu.showAtPosition({ x, y: retanguloBotao.bottom + 4 });

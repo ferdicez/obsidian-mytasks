@@ -169,14 +169,15 @@ export class MotorKanban {
 
 		cabecalho.createEl("h3", { text: "kanban" });
 
-		// Sem elementoAlinhamento: os menus descem alinhados ao próprio botão clicado (igual ao
-		// Calendário), não ao início do cabeçalho — a pedido dela, pra abrir sob o botão de Filtro.
+		// Agrupamento como abas lado a lado (igual às visualizações do Calendário), não como menu:
+		// trocar de agrupamento é a ação mais frequente do Kanban, então fica sempre à vista.
 		if (this.opcoes.permitirTrocaAgrupamento !== false) {
 			new SeletorAgrupamento(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
 				agrupamentoAtual: this.agrupamento,
 				permitirNenhum: false,
 				permitirDia: false,
+				apresentacao: "abas",
 				aoEscolher: (agrupamento) => {
 					this.agrupamento = agrupamento;
 					this.renderizarGrade();

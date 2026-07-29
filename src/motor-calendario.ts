@@ -104,9 +104,9 @@ export class MotorCalendario {
 		this.desenharCabecalho();
 
 		const areaGrade = this.containerEl.createDiv({ cls: "mytasks-calendario-grade-area" });
-		if (this.modo === "semana-horarios" || this.modo === "semana-kanban") {
-			areaGrade.addClass("mytasks-calendario-grade-area-semana");
-		}
+		// Todas as views usam a moldura "aberta": só o traço reto no topo, sem laterais/base
+		// nem cantos curvos.
+		areaGrade.addClass("mytasks-calendario-grade-area-aberta");
 		if (this.modo === "semana-horarios") areaGrade.addClass("mytasks-calendario-grade-area-vertical");
 
 		if (this.modo === "mes") this.desenharMes(areaGrade);
@@ -187,6 +187,24 @@ export class MotorCalendario {
 
 		const ladoDireito = cabecalho.createDiv({ cls: "mytasks-calendario-cabecalho-lado mytasks-calendario-cabecalho-lado-direito" });
 
+		// Abas de visualização (dia · semana · mês · ano), ANTES do filtro. Trocar de modo é a ação
+		// mais frequente do cabeçalho, então fica sempre à vista em vez de dentro de um menu.
+		if (this.opcoes.permitirTrocaModo !== false) {
+			const abas = ladoDireito.createDiv({ cls: "mytasks-calendario-abas-modo" });
+			for (const chave of Object.keys(ROTULOS_MODO) as ModoCalendario[]) {
+				const aba = abas.createEl("button", {
+					cls: "mytasks-calendario-aba-modo",
+					text: ROTULOS_MODO[chave],
+				});
+				if (chave === this.modo) aba.addClass("mytasks-calendario-aba-modo-ativa");
+				aba.addEventListener("click", () => {
+					if (chave === this.modo) return;
+					this.modo = chave;
+					this.renderizar();
+				});
+			}
+		}
+
 		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
 		if (this.opcoes.permitirEdicaoFiltro !== false && !filtroMovelVazio) {
 			new SeletorFiltroSalvo(ladoDireito, {
@@ -201,36 +219,6 @@ export class MotorCalendario {
 			});
 		}
 
-		if (this.opcoes.permitirTrocaModo !== false) {
-			const botaoSeletorModo = ladoDireito.createEl("button", { cls: "mytasks-calendario-seletor-modo" });
-			const textoSeletorModo = botaoSeletorModo.createSpan({
-				cls: "mytasks-seletor-discreto-texto",
-				text: ROTULOS_MODO[this.modo],
-			});
-			const chevron = botaoSeletorModo.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
-			setIcon(chevron, "chevrons-up-down");
-
-			botaoSeletorModo.addEventListener("click", () => {
-				const menu = new Menu();
-				menu.setUseNativeMenu(false);
-				menu.addItem((item) => item.setTitle("selecionar visualização").setDisabled(true));
-				menu.addSeparator();
-				for (const chave of Object.keys(ROTULOS_MODO) as ModoCalendario[]) {
-					menu.addItem((item) =>
-						item
-							.setTitle(ROTULOS_MODO[chave])
-							.setChecked(chave === this.modo)
-							.onClick(() => {
-								this.modo = chave;
-								textoSeletorModo.setText(ROTULOS_MODO[this.modo]);
-								this.renderizar();
-							})
-					);
-				}
-				const retangulo = botaoSeletorModo.getBoundingClientRect();
-				menu.showAtPosition({ x: retangulo.left, y: retangulo.bottom + 4 });
-			});
-		}
 	}
 
 	private navegar(direcao: 1 | -1): void {
@@ -412,7 +400,6 @@ export class MotorCalendario {
 				text: String(dia.getDate()).padStart(2, "0"),
 				cls: "mytasks-calendario-numero-dia",
 			});
-			cabecalhoColuna.createEl("span", { text: "|", cls: "mytasks-calendario-separador-cabecalho" });
 			cabecalhoColuna.createEl("span", { text: NOMES_DIA_SEMANA_COMPLETO[dia.getDay()].toLowerCase() });
 
 			coluna.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
