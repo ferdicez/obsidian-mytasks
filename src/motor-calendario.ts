@@ -2,6 +2,7 @@ import { App, Menu, setIcon } from "obsidian";
 import {
 	ConfigEfetivaGrupo,
 	ConfiguracoesGestorTarefas,
+	EventoExterno,
 	GrupoFiltro,
 	ID_STATUS,
 	ModoCalendario,
@@ -16,6 +17,8 @@ import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA, Op
 import { compilarFiltro } from "./motor-filtro";
 import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
 import { SeletorGrupo } from "./seletor-grupo";
+import { ServicoCalendariosExternos, compararPorHorario } from "./calendarios-externos";
+import { desenharEventoExterno } from "./render-evento-externo";
 
 export type { ModoCalendario };
 
@@ -46,6 +49,11 @@ const FAIXAS_DIA: { titulo: string; horaInicial: number; horaFinal: number }[] =
 // Linhas por faixa: duas por hora (:00 e :30).
 const HORAS_POR_FAIXA = Math.max(...FAIXAS_DIA.map((f) => (f.horaFinal - f.horaInicial + 1) * 2));
 
+// Quantos itens a célula do modo Mês mostra antes de virar "+N" (o clique abre o painel com tudo).
+// Compromissos e tarefas dividem esses lugares — o teto é do total, não de cada tipo, pra célula não
+// crescer e a grade do mês manter a forma.
+const MAX_ITENS_CELULA_MES = 2;
+
 export interface OpcoesMotorCalendario {
 	app: App;
 	repositorio: RepositorioTarefas;
@@ -65,6 +73,9 @@ export interface OpcoesMotorCalendario {
 	configuracoesGlobais?: ConfiguracoesGestorTarefas;
 	grupoAtivoId?: string;
 	aoTrocarGrupo?: (grupoId: string) => void;
+	// Agendas externas (Google via .ics) do grupo. Ausente = calendário desenha só tarefas, como
+	// sempre. Precisa de `grupoAtivoId` para saber de qual grupo são as agendas.
+	calendariosExternos?: ServicoCalendariosExternos;
 }
 
 function formatarData(data: Date): string {
@@ -124,6 +135,30 @@ export class MotorCalendario {
 		const filtroFixo = this.opcoes.filtro ? todas.filter(this.opcoes.filtro) : todas;
 		const filtroInterativo = compilarFiltro(this.grupoFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
 		return filtroFixo.filter(filtroInterativo);
+	}
+
+	// Eventos externos da janela pedida, indexados por dia (AAAA-MM-DD) e já ordenados por horário.
+	// Os filtros do calendário NÃO se aplicam aqui: eles comparam propriedades de tarefa (status,
+	// grupo, prazo), que um compromisso do Google não tem. O interruptor geral em Configurações é o
+	// controle de exibição dos eventos.
+	private eventosPorDia(inicio: Date, fim: Date): Map<string, EventoExterno[]> {
+		const mapa = new Map<string, EventoExterno[]>();
+		const servico = this.opcoes.calendariosExternos;
+		// Sem grupo identificado não há de quais agendas puxar: as agendas são cadastradas por grupo.
+		if (!servico || !this.opcoes.grupoAtivoId) return mapa;
+
+		for (const evento of servico.eventosNaJanela(this.opcoes.grupoAtivoId, inicio, fim)) {
+			let lista = mapa.get(evento.data);
+			if (!lista) {
+				lista = [];
+				mapa.set(evento.data, lista);
+			}
+			lista.push(evento);
+		}
+		for (const lista of mapa.values()) {
+			lista.sort((a, b) => compararPorHorario(a.horario, b.horario) || a.titulo.localeCompare(b.titulo));
+		}
+		return mapa;
 	}
 
 	private opcoesCartao(extras: OpcoesCartaoTarefa = {}): OpcoesCartaoTarefa {
@@ -315,6 +350,12 @@ export class MotorCalendario {
 		const inicioGrade = inicioSemana(primeiroDiaMes);
 		const hojeStr = formatarData(new Date());
 
+		// A grade do mês mostra 42 células, então a janela de eventos vai do primeiro ao último dia
+		// DESENHADO (não do mês calendário) — senão os dias vizinhos ficariam sem compromissos.
+		const fimGrade = new Date(inicioGrade);
+		fimGrade.setDate(fimGrade.getDate() + 41);
+		const eventosPorDia = this.eventosPorDia(inicioGrade, fimGrade);
+
 		for (let i = 0; i < 42; i++) {
 			const dia = new Date(inicioGrade);
 			dia.setDate(dia.getDate() + i);
@@ -328,50 +369,94 @@ export class MotorCalendario {
 			celula.createDiv({ cls: "mytasks-calendario-numero-dia", text: String(dia.getDate()).padStart(2, "0") });
 
 			const tarefasDoDia = porDia.get(diaStr) ?? [];
+			const eventosDoDia = eventosPorDia.get(diaStr) ?? [];
 			const listaDia = celula.createDiv({ cls: "mytasks-calendario-lista-dia" });
-			for (const tarefa of tarefasDoDia.slice(0, 3)) {
-				desenharCartaoTarefa(
-					listaDia,
-					this.opcoes.app,
-					this.opcoes.repositorio,
-					this.opcoes.configuracoes,
-					tarefa,
-					this.opcoesCartao({ mostrarCheckbox: true, aoAtualizar: () => this.renderizar() })
-				);
+
+			// Compromissos e tarefas numa fila só, ordenada por horário (quem não tem horário vai pro
+			// fim) — é o que faz a célula parecer uma agenda do dia em vez de duas pilhas separadas.
+			const itensDoDia = this.ordenarItensDoDia(tarefasDoDia, eventosDoDia);
+			for (const item of itensDoDia.slice(0, MAX_ITENS_CELULA_MES)) {
+				if (item.tipo === "evento") {
+					desenharEventoExterno(listaDia, item.evento, { compacto: true });
+				} else {
+					desenharCartaoTarefa(
+						listaDia,
+						this.opcoes.app,
+						this.opcoes.repositorio,
+						this.opcoes.configuracoes,
+						item.tarefa,
+						this.opcoesCartao({ mostrarCheckbox: true, aoAtualizar: () => this.renderizar() })
+					);
+				}
 			}
-			if (tarefasDoDia.length > 3) {
-				listaDia.createDiv({ cls: "mytasks-calendario-mais", text: `+${tarefasDoDia.length - 3}` });
+			if (itensDoDia.length > MAX_ITENS_CELULA_MES) {
+				listaDia.createDiv({
+					cls: "mytasks-calendario-mais",
+					text: `Mais ${itensDoDia.length - MAX_ITENS_CELULA_MES}`,
+				});
 			}
 
 			celula.addEventListener("click", () => {
 				this.diaExpandido = this.diaExpandido === diaStr ? null : diaStr;
-				this.mostrarDetalheDia(celula, diaStr, tarefasDoDia);
+				this.mostrarDetalheDia(celula, diaStr, tarefasDoDia, eventosDoDia);
 			});
 			celula.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
 			this.registrarAlvoDeSoltura(celula, diaStr);
 		}
 	}
 
-	private mostrarDetalheDia(celula: HTMLElement, diaStr: string, tarefas: Tarefa[]): void {
+	// Intercala tarefas e compromissos de um dia numa fila só, por horário. Empate entre um evento e
+	// uma tarefa no mesmo horário deixa o EVENTO primeiro: compromisso é hora marcada com terceiros,
+	// a tarefa é o que ela encaixa em volta.
+	private ordenarItensDoDia(
+		tarefas: Tarefa[],
+		eventos: EventoExterno[]
+	): ({ tipo: "evento"; evento: EventoExterno } | { tipo: "tarefa"; tarefa: Tarefa })[] {
+		const itens: ({ tipo: "evento"; evento: EventoExterno; hora: string | null } | { tipo: "tarefa"; tarefa: Tarefa; hora: string | null })[] = [
+			...eventos.map((evento) => ({ tipo: "evento" as const, evento, hora: evento.horario })),
+			...tarefas.map((tarefa) => ({ tipo: "tarefa" as const, tarefa, hora: tarefa.horario ?? null })),
+		];
+		itens.sort((a, b) => {
+			const porHora = compararPorHorario(a.hora, b.hora);
+			if (porHora !== 0) return porHora;
+			if (a.tipo !== b.tipo) return a.tipo === "evento" ? -1 : 1;
+			return 0;
+		});
+		return itens.map((item) =>
+			item.tipo === "evento" ? { tipo: "evento", evento: item.evento } : { tipo: "tarefa", tarefa: item.tarefa }
+		);
+	}
+
+	private mostrarDetalheDia(
+		celula: HTMLElement,
+		diaStr: string,
+		tarefas: Tarefa[],
+		eventos: EventoExterno[] = []
+	): void {
 		const existente = celula.querySelector(".mytasks-calendario-detalhe-dia");
 		if (existente) {
 			existente.remove();
 			return;
 		}
 		const detalhe = celula.createDiv({ cls: "mytasks-calendario-detalhe-dia" });
-		if (tarefas.length === 0) {
+		const itens = this.ordenarItensDoDia(tarefas, eventos);
+		if (itens.length === 0) {
 			detalhe.createEl("p", { text: "Nenhuma tarefa neste dia.", cls: "mytasks-vazio" });
 			return;
 		}
-		for (const tarefa of tarefas) {
-			desenharCartaoTarefa(
-				detalhe,
-				this.opcoes.app,
-				this.opcoes.repositorio,
-				this.opcoes.configuracoes,
-				tarefa,
-				this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
-			);
+		for (const item of itens) {
+			if (item.tipo === "evento") {
+				desenharEventoExterno(detalhe, item.evento);
+			} else {
+				desenharCartaoTarefa(
+					detalhe,
+					this.opcoes.app,
+					this.opcoes.repositorio,
+					this.opcoes.configuracoes,
+					item.tarefa,
+					this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
+				);
+			}
 		}
 	}
 
@@ -385,6 +470,10 @@ export class MotorCalendario {
 
 		const grade = container.createDiv({ cls: "mytasks-calendario-grade-semana-kanban" });
 		grade.style.setProperty("--mytasks-num-colunas", String(numColunas));
+
+		const fimSemana = new Date(inicio);
+		fimSemana.setDate(fimSemana.getDate() + numColunas - 1);
+		const eventosPorDia = this.eventosPorDia(inicio, fimSemana);
 
 		for (let i = 0; i < numColunas; i++) {
 			const dia = new Date(inicio);
@@ -406,15 +495,20 @@ export class MotorCalendario {
 			this.registrarAlvoDeSoltura(coluna, diaStr);
 
 			const tarefasDoDia = tarefas.filter((t) => t.data === diaStr);
-			for (const tarefa of tarefasDoDia) {
-				desenharCartaoTarefa(
-					coluna,
-					this.opcoes.app,
-					this.opcoes.repositorio,
-					this.opcoes.configuracoes,
-					tarefa,
-					this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
-				);
+			const itensDoDia = this.ordenarItensDoDia(tarefasDoDia, eventosPorDia.get(diaStr) ?? []);
+			for (const item of itensDoDia) {
+				if (item.tipo === "evento") {
+					desenharEventoExterno(coluna, item.evento);
+				} else {
+					desenharCartaoTarefa(
+						coluna,
+						this.opcoes.app,
+						this.opcoes.repositorio,
+						this.opcoes.configuracoes,
+						item.tarefa,
+						this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
+					);
+				}
 			}
 		}
 	}
@@ -430,6 +524,7 @@ export class MotorCalendario {
 		const ehHoje = diaStr === formatarData(new Date());
 
 		const tarefasDoDia = tarefas.filter((t) => t.data === diaStr);
+		const eventosDoDia = this.eventosPorDia(this.dataReferencia, this.dataReferencia).get(diaStr) ?? [];
 
 		const grade = container.createDiv({ cls: "mytasks-calendario-grade-dia" });
 		if (ehHoje) grade.addClass("mytasks-calendario-hoje");
@@ -445,21 +540,31 @@ export class MotorCalendario {
 		const corpoSemHorario = colunaSemHorario.createDiv({ cls: "mytasks-calendario-corpo-sem-horario" });
 		// Também recolhe aqui quem tem horário fora das faixas (madrugada, 00:00–05:00): sem isso
 		// a tarefa não teria célula nenhuma e sumiria da tela.
-		const semHorario = tarefasDoDia.filter((t) => {
-			if (!t.horario) return true;
-			const hora = parseInt(t.horario.split(":")[0], 10);
+		const foraDasFaixas = (horario: string | null): boolean => {
+			if (!horario) return true;
+			const hora = parseInt(horario.split(":")[0], 10);
 			if (Number.isNaN(hora)) return true;
 			return !FAIXAS_DIA.some((f) => hora >= f.horaInicial && hora <= f.horaFinal);
-		});
-		for (const tarefa of semHorario) {
-			desenharCartaoTarefa(
-				corpoSemHorario,
-				this.opcoes.app,
-				this.opcoes.repositorio,
-				this.opcoes.configuracoes,
-				tarefa,
-				this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
-			);
+		};
+
+		const semHorario = tarefasDoDia.filter((t) => foraDasFaixas(t.horario));
+		// Evento de dia inteiro e evento de madrugada caem aqui pelo mesmo motivo das tarefas: não há
+		// linha de hora que os comporte, e sumir da tela seria pior que ficar nesta coluna.
+		const eventosSemHorario = eventosDoDia.filter((e) => e.diaInteiro || foraDasFaixas(e.horario));
+
+		for (const item of this.ordenarItensDoDia(semHorario, eventosSemHorario)) {
+			if (item.tipo === "evento") {
+				desenharEventoExterno(corpoSemHorario, item.evento);
+			} else {
+				desenharCartaoTarefa(
+					corpoSemHorario,
+					this.opcoes.app,
+					this.opcoes.repositorio,
+					this.opcoes.configuracoes,
+					item.tarefa,
+					this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
+				);
+			}
 		}
 		corpoSemHorario.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
 		// horario: null → soltar aqui remove o horário da tarefa (desagenda, volta a ser só "do dia").
@@ -481,22 +586,30 @@ export class MotorCalendario {
 					linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: horarioClique });
 
 					const celulaHora = linha.createDiv({ cls: "mytasks-calendario-celula-hora" });
-					// Cada tarefa cai numa única linha: minuto < 30 na linha cheia, >= 30 na de meia hora.
-					const tarefasHora = tarefasDoDia.filter((t) => {
-						if (!t.horario) return false;
-						const [h, m] = t.horario.split(":").map((parte) => parseInt(parte, 10));
+					// Cada item cai numa única linha: minuto < 30 na linha cheia, >= 30 na de meia hora.
+					// Mesma regra para tarefa e compromisso, então 14:45 aparece na linha 14:30 nos dois.
+					const nestaLinha = (horario: string | null): boolean => {
+						if (!horario) return false;
+						const [h, m] = horario.split(":").map((parte) => parseInt(parte, 10));
 						if (h !== hora) return false;
 						return minuto === 0 ? !(m >= 30) : m >= 30;
-					});
-					for (const tarefa of tarefasHora) {
-						desenharCartaoTarefa(
-							celulaHora,
-							this.opcoes.app,
-							this.opcoes.repositorio,
-							this.opcoes.configuracoes,
-							tarefa,
-							this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
-						);
+					};
+					const tarefasHora = tarefasDoDia.filter((t) => nestaLinha(t.horario));
+					const eventosHora = eventosDoDia.filter((e) => !e.diaInteiro && nestaLinha(e.horario));
+
+					for (const item of this.ordenarItensDoDia(tarefasHora, eventosHora)) {
+						if (item.tipo === "evento") {
+							desenharEventoExterno(celulaHora, item.evento);
+						} else {
+							desenharCartaoTarefa(
+								celulaHora,
+								this.opcoes.app,
+								this.opcoes.repositorio,
+								this.opcoes.configuracoes,
+								item.tarefa,
+								this.opcoesCartao({ aoAtualizar: () => this.renderizar() })
+							);
+						}
 					}
 					celulaHora.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr, horarioClique));
 					this.registrarAlvoDeSoltura(celulaHora, diaStr, horarioClique);
@@ -518,6 +631,9 @@ export class MotorCalendario {
 		const ano = this.dataReferencia.getFullYear();
 		const grade = container.createDiv({ cls: "mytasks-calendario-grade-ano" });
 
+		// Janela do ano inteiro: uma expansão só, reaproveitada pelos doze mini-meses.
+		const eventosPorDia = this.eventosPorDia(new Date(ano, 0, 1), new Date(ano, 11, 31));
+
 		for (let mes = 0; mes < 12; mes++) {
 			const miniMes = grade.createDiv({ cls: "mytasks-calendario-mini-mes" });
 			miniMes.createEl("h4", { text: NOMES_MES[mes] });
@@ -536,11 +652,18 @@ export class MotorCalendario {
 				}
 				const diaStr = formatarData(dia);
 				const quantidade = contagemPorDia.get(diaStr) ?? 0;
+				const quantidadeEventos = (eventosPorDia.get(diaStr) ?? []).length;
 				const miniCelula = miniGrade.createDiv({ cls: "mytasks-calendario-mini-celula", text: String(dia.getDate()) });
 				if (diaStr === hojeStr) miniCelula.addClass("mytasks-calendario-hoje");
-				if (quantidade > 0) {
+				if (quantidade > 0 || quantidadeEventos > 0) {
 					miniCelula.addClass("mytasks-calendario-mini-com-tarefas");
-					miniCelula.setAttribute("title", `${quantidade} tarefa(s)`);
+					// Um dia só com compromisso ganha marca própria: no modo Ano a bolinha é a única
+					// informação, então "tem tarefa" e "tem compromisso" precisam ser distinguíveis.
+					if (quantidade === 0) miniCelula.addClass("mytasks-calendario-mini-so-eventos");
+					const partes: string[] = [];
+					if (quantidade > 0) partes.push(`${quantidade} tarefa(s)`);
+					if (quantidadeEventos > 0) partes.push(`${quantidadeEventos} compromisso(s)`);
+					miniCelula.setAttribute("title", partes.join(" · "));
 				}
 				miniCelula.addEventListener("click", () => {
 					this.dataReferencia = dia;

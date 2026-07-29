@@ -49,6 +49,34 @@ function removerFrontmatter(conteudo: string): string {
 	return match ? conteudo.slice(match[0].length) : conteudo;
 }
 
+// Lê o valor de UMA chave direto do texto do frontmatter, sem passar por parser de YAML. Existe
+// porque notas modelo costumam ter placeholders de Templater (`<% ... %>`) que invalidam o YAML
+// inteiro — nesses arquivos o metadataCache do Obsidian não indexa frontmatter algum, e ler pelo
+// cache devolveria vazio para uma nota que visivelmente tem a chave preenchida.
+//
+// Deliberadamente simples: só chaves de primeiro nível no formato `chave: valor`. Devolve o valor
+// como string minúscula e sem aspas, ou null se a chave não existir (ou estiver vazia).
+export function lerChaveDoFrontmatterCru(conteudo: string, chave: string): string | null {
+	const bloco = conteudo.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+	if (!bloco) return null;
+
+	for (const linha of bloco[1].split(/\r?\n/)) {
+		// Ignora aninhamento (linha indentada) e itens de lista: só interessa `chave: valor` na raiz.
+		if (/^\s/.test(linha) || linha.startsWith("-")) continue;
+		const separador = linha.indexOf(":");
+		if (separador === -1) continue;
+		if (linha.slice(0, separador).trim() !== chave) continue;
+
+		const valor = linha
+			.slice(separador + 1)
+			.trim()
+			.replace(/^["']|["']$/g, "")
+			.trim();
+		return valor.length > 0 ? valor.toLowerCase() : null;
+	}
+	return null;
+}
+
 // Renomeia uma chave de frontmatter num conjunto de arquivos já resolvido — reaproveitado tanto pelo
 // rename de UM grupo (RepositorioTarefas.renomearChaveFrontmatter, escopado pela pasta do grupo) quanto
 // pelo rename do discriminador de grupo (MyTasksPlugin.renomearChavePropriedadeGrupo, que precisa somar os
@@ -275,7 +303,8 @@ export class RepositorioTarefas {
 			data: null,
 			horario: null,
 			recorrencia: "nenhuma",
-			manterHistorico: true,
+			// Captura rápida nasce sempre no Inbox, então a modelo consultada é a do Inbox (se houver).
+			manterHistorico: await this.manterHistoricoInicial(config, true),
 			recorrenciaDataFim: null,
 			diasAntecedenciaAviso: null,
 			propriedades,
@@ -299,18 +328,21 @@ export class RepositorioTarefas {
 		const horario = valoresIniciais?.horario ?? null;
 		const status = data ? opcaoStatusComData(config.status) ?? "" : primeiraOpcaoStatus(config.status) ?? "";
 
+		// Calculado antes da criação porque também decide QUAL nota modelo define o valor inicial de
+		// "manter registro ao concluir" (a do Inbox tem prioridade quando a tarefa nasce lá).
+		const noInbox = status === (primeiraOpcaoStatus(config.status) ?? "");
+
 		const arquivo = await this.criarTarefa("Nova tarefa", {
 			status,
 			data,
 			horario,
 			recorrencia: "nenhuma",
-			manterHistorico: true,
+			manterHistorico: await this.manterHistoricoInicial(config, noInbox),
 			recorrenciaDataFim: null,
 			diasAntecedenciaAviso: null,
 			propriedades: {},
 		});
 
-		const noInbox = status === (primeiraOpcaoStatus(config.status) ?? "");
 		const corpo = await this.obterCorpoNovaTarefa(config, noInbox);
 		if (corpo) await this.app.vault.append(arquivo, "\n" + corpo + "\n");
 
@@ -332,6 +364,29 @@ export class RepositorioTarefas {
 			}
 		}
 		return gerarCorpoMetaBind(this.app, config, (propriedadeId) => this.valoresUsados(propriedadeId));
+	}
+
+	// Valor inicial de "manter registro ao concluir" numa tarefa nova. O corpo da nota modelo é copiado
+	// sem o frontmatter (ver obterCorpoNovaTarefa), então um `manter: false` deixado lá era perdido e
+	// toda tarefa nascia com `true` fixo. Aqui esse valor é lido da modelo aplicável e respeitado; sem
+	// nota modelo — ou sem a chave nela — segue o default `true` de sempre.
+	//
+	// Lê o TEXTO CRU em vez do metadataCache de propósito: notas modelo costumam ter placeholders de
+	// Templater (`<% tp.date.now(...) %>`) no frontmatter, que não são YAML válido. Quando o parse
+	// falha, o Obsidian não indexa frontmatter nenhum e o cache devolveria vazio — o valor da usuária
+	// seria silenciosamente ignorado justamente nas notas modelo que mais precisam dele.
+	private async manterHistoricoInicial(config: ConfigEfetivaGrupo, noInbox: boolean): Promise<boolean> {
+		const caminhoInbox = config.templateNota.notaModeloInboxCaminho;
+		const caminhoModelo = noInbox && caminhoInbox ? caminhoInbox : config.templateNota.notaModeloCaminho;
+		if (!caminhoModelo) return true;
+
+		const arquivoModelo = this.app.vault.getAbstractFileByPath(caminhoModelo);
+		if (!(arquivoModelo instanceof TFile)) return true;
+
+		const conteudo = await this.app.vault.read(arquivoModelo);
+		const valor = lerChaveDoFrontmatterCru(conteudo, config.chavesFixas.manterHistorico);
+		if (valor === null) return true;
+		return valor !== "false";
 	}
 
 	async atualizarTarefaCompleta(tarefa: Tarefa, dados: DadosTarefaEscrita): Promise<void> {

@@ -4,6 +4,7 @@ import {
 	ConfiguracoesGestorTarefas,
 	GRUPO_PADRAO,
 	GrupoTarefas,
+	INTERVALO_ATUALIZACAO_PADRAO_MIN,
 	arquivoEhTarefaRelevante,
 	configDoGrupo,
 	grupoAtivoOuPrimeiro,
@@ -19,12 +20,15 @@ import { registrarProcessadorCalendario } from "./embed-calendario";
 import { registrarProcessadorLista } from "./embed-lista";
 import { registrarProcessadorKanban } from "./embed-kanban";
 import { AbaConfiguracoes } from "./configuracoes";
+import { ServicoCalendariosExternos } from "./calendarios-externos";
 
 export default class MyTasksPlugin extends Plugin {
 	configuracoes: ConfiguracoesGestorTarefas = CONFIGURACOES_PADRAO;
 	// Repositório do grupo default (primeiro grupo). Views/embeds ainda single-group nesta fase o usam;
 	// na Fase 4 cada view pega o repositório do seu próprio grupo via repositorioDoGrupo().
 	repositorio!: RepositorioTarefas;
+	// Agendas externas (Google via .ics) — global, não por grupo: a agenda da usuária é uma só.
+	calendariosExternos!: ServicoCalendariosExternos;
 	private repositoriosPorGrupo = new Map<string, RepositorioTarefas>();
 	private ribbonsDeGrupos: HTMLElement[] = [];
 
@@ -81,6 +85,19 @@ export default class MyTasksPlugin extends Plugin {
 		await this.carregarConfiguracoes();
 
 		this.repositorio = this.repositorioDoGrupo(this.grupoDefault().id);
+
+		this.calendariosExternos = new ServicoCalendariosExternos({
+			configuracoes: () => this.configuracoes,
+			salvar: () => this.salvarConfiguracoes(),
+			aoAtualizar: () => this.redesenharCalendarios(),
+		});
+
+		// Atualização periódica. O tick é fixo em 5 min; quem decide se é hora de buscar é o serviço,
+		// comparando a idade do cache com o intervalo configurado — assim mudar o intervalo em
+		// Configurações passa a valer sem precisar recriar o timer.
+		this.registerInterval(
+			window.setInterval(() => void this.calendariosExternos.atualizarTodos(), 5 * 60 * 1000)
+		);
 
 		this.registerView(TIPO_VISTA_LISTA, (leaf) => new VistaLista(leaf, this));
 		this.registerView(TIPO_VISTA_LISTA_ABA, (leaf) => new VistaListaAba(leaf, this));
@@ -174,6 +191,17 @@ export default class MyTasksPlugin extends Plugin {
 		this.app.workspace.detachLeavesOfType(TIPO_VISTA_CALENDARIO_SIDEBAR);
 		this.app.workspace.detachLeavesOfType(TIPO_VISTA_CALENDARIO_ABA);
 		this.app.workspace.detachLeavesOfType(TIPO_VISTA_KANBAN_ABA);
+	}
+
+	// Redesenha os calendários abertos (aba e barra lateral) — chamado quando uma busca de agenda
+	// externa traz conteúdo novo. Só o calendário: eventos externos não aparecem em Lista/Kanban.
+	redesenharCalendarios(): void {
+		for (const tipo of [TIPO_VISTA_CALENDARIO_ABA, TIPO_VISTA_CALENDARIO_SIDEBAR]) {
+			for (const leaf of this.app.workspace.getLeavesOfType(tipo)) {
+				const view = leaf.view as { redesenhar?: () => void };
+				view.redesenhar?.();
+			}
+		}
 	}
 
 	// (Re)cria os ícones de ribbon da Lista, um por grupo. Chamado no onload e sempre que grupos/ícones mudam.
@@ -284,7 +312,10 @@ export default class MyTasksPlugin extends Plugin {
 			delete (grupo as unknown as Record<string, unknown>).grupos;
 			delete (grupo as unknown as Record<string, unknown>).propriedadeGrupo;
 			this.migrarCamposDeGrupo(grupo, dadosSalvos);
+			// Parte dos defaults (em vez de listar os campos do topo à mão) pra que todo campo global
+			// novo já nasça preenchido também nesta migração, não só no caminho do formato novo.
 			this.configuracoes = {
+				...JSON.parse(JSON.stringify(CONFIGURACOES_PADRAO)),
 				propriedadeGrupo: null,
 				grupos: [grupo],
 				grupoAtivoKanbanId: grupo.id,
@@ -292,9 +323,16 @@ export default class MyTasksPlugin extends Plugin {
 			};
 			precisaSalvar = true; // grava já no formato novo (idempotente)
 		} else {
-			this.configuracoes = Object.assign({}, CONFIGURACOES_PADRAO, dadosSalvos);
+			// CONFIGURACOES_PADRAO é clonada: sem isso, os arrays default (calendariosExternos, cache…)
+			// seriam os MESMOS objetos da constante, e escrever neles contaminaria o default do módulo.
+			this.configuracoes = Object.assign({}, JSON.parse(JSON.stringify(CONFIGURACOES_PADRAO)), dadosSalvos);
 			if (this.configuracoes.grupos.length === 0) {
 				this.configuracoes.grupos = [{ ...GRUPO_PADRAO }];
+			}
+			// Campos globais que podem faltar num data.json salvo por uma versão anterior a eles.
+			if (!Array.isArray(this.configuracoes.cacheCalendariosExternos)) this.configuracoes.cacheCalendariosExternos = [];
+			if (typeof this.configuracoes.intervaloAtualizacaoMin !== "number") {
+				this.configuracoes.intervaloAtualizacaoMin = INTERVALO_ATUALIZACAO_PADRAO_MIN;
 			}
 			// Garante campos novos de grupo em instalações já no formato novo + reaplica migrações por grupo.
 			const gruposSalvos = (dadosSalvos.grupos ?? []) as Record<string, unknown>[];
@@ -312,6 +350,12 @@ export default class MyTasksPlugin extends Plugin {
 
 	// Reaplica as migrações de campo (que antes eram globais) agora no escopo de UM grupo.
 	private migrarCamposDeGrupo(grupo: GrupoTarefas, dadosDoGrupo: Record<string, unknown>): void {
+		// Agendas externas por grupo: garante os campos em grupos salvos antes deles existirem.
+		// Object.assign(GRUPO_PADRAO, grupoSalvo) já traria o default, mas o array viria COMPARTILHADO
+		// com a constante do módulo — todos os grupos apontariam para a mesma lista.
+		if (!Array.isArray(grupo.calendariosExternos)) grupo.calendariosExternos = [];
+		if (typeof grupo.mostrarEventosExternos !== "boolean") grupo.mostrarEventosExternos = true;
+
 		// Chave técnica da data ausente: deriva da normalização do rótulo salvo.
 		if (!grupo.dataTarefa.chave) {
 			grupo.dataTarefa.chave = normalizarChave(grupo.dataTarefa.rotulo);

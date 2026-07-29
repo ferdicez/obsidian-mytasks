@@ -318,6 +318,12 @@ export interface ConfigEfetivaGrupo {
 	recorrenciaAtiva: boolean;
 	calendarioMostrarDetalhes: boolean;
 	calendarioPropriedadesVisiveisPorModo: Record<ModoCalendario, string[] | null>;
+	// Agendas externas (Google via .ics) que aparecem no calendário DESTE grupo, junto das tarefas
+	// dele. Ficam no grupo — e não no topo global — porque cada grupo é um contexto de trabalho
+	// próprio: a agenda de um cliente não deve poluir o calendário de outro.
+	calendariosExternos: CalendarioExterno[];
+	// Interruptor do grupo: esconde os compromissos sem apagar o cadastro das agendas.
+	mostrarEventosExternos: boolean;
 	kanbanPropriedadesVisiveis: string[] | null;
 	listaPropriedadesVisiveis: string[] | null;
 	listaInboxPropriedadesVisiveis: string[] | null;
@@ -350,6 +356,53 @@ export interface GrupoTarefas extends ConfigEfetivaGrupo {
 	icone: string; // ícone Lucide para o ribbon da sidebar e o seletor de grupo
 }
 
+// ---------- Calendários externos (Google Agenda via .ics) ----------
+
+// Uma agenda externa assinada por URL .ics ("endereço secreto em formato iCal" do Google Agenda).
+// Só leitura: o plugin busca, lê e desenha os eventos no calendário — nunca escreve de volta.
+export interface CalendarioExterno {
+	id: string;
+	nome: string;
+	// URL do .ics. É um segredo (dá acesso de leitura à agenda a quem tiver) e vive só no data.json.
+	url: string;
+	cor: string;
+	ativo: boolean;
+}
+
+// Um evento já normalizado a partir do .ics, pronto pro calendário desenhar. Ocorrências de eventos
+// recorrentes viram entradas separadas (uma por data), então quem consome não precisa saber de RRULE.
+export interface EventoExterno {
+	// `${calendarioId}:${uid}:${data}` — único por ocorrência (o UID do .ics se repete entre ocorrências).
+	id: string;
+	calendarioId: string;
+	calendarioNome: string;
+	cor: string;
+	titulo: string;
+	descricao: string | null;
+	local: string | null;
+	// AAAA-MM-DD no fuso local, mesmo formato que Tarefa.data — é o que casa evento e tarefa no mesmo dia.
+	data: string;
+	// HH:MM no fuso local, ou null em evento de dia inteiro (que cai na coluna "sem horário" do modo Dia).
+	horario: string | null;
+	// HH:MM de término; null quando é dia inteiro ou quando o .ics não trouxe fim.
+	horarioFim: string | null;
+	diaInteiro: boolean;
+}
+
+// Cache do que foi baixado de cada calendário, persistido junto das configurações: o calendário
+// continua mostrando os compromissos offline (possivelmente desatualizados) em vez de esvaziar.
+export interface CacheCalendarioExterno {
+	calendarioId: string;
+	// Epoch ms da última busca BEM-SUCEDIDA.
+	buscadoEm: number;
+	// Conteúdo bruto do .ics — reprocessado a cada leitura, então correção no parser vale pro cache antigo.
+	conteudo: string;
+	// Mensagem do último erro de busca, ou null se a última tentativa deu certo. Mostrada em Configurações.
+	erro: string | null;
+}
+
+export const INTERVALO_ATUALIZACAO_PADRAO_MIN = 30;
+
 export interface ConfiguracoesGestorTarefas {
 	// Propriedade global (chave de frontmatter) que discrimina a qual grupo cada tarefa pertence. Null = ainda
 	// não configurada -> modo single-group (todo mundo cai no primeiro grupo).
@@ -358,6 +411,11 @@ export interface ConfiguracoesGestorTarefas {
 	// Grupo lembrado por view única (Kanban/Calendário). Null cai no primeiro grupo.
 	grupoAtivoKanbanId: string | null;
 	grupoAtivoCalendarioId: string | null;
+	// O CACHE do conteúdo baixado é global mesmo com as agendas sendo por grupo: é dado derivado
+	// (o .ics puro, indexado por id de agenda), não configuração. Manter num lugar só evita baixar
+	// duas vezes a mesma URL caso dois grupos assinem a mesma agenda.
+	cacheCalendariosExternos: CacheCalendarioExterno[];
+	intervaloAtualizacaoMin: number;
 }
 
 // Defaults planos de hoje, agora encapsulados no primeiro grupo. Uma instalação nova nasce com este único grupo
@@ -387,6 +445,10 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 		"semana-kanban": [],
 		ano: [],
 	},
+	// Sem agenda cadastrada, todo o caminho de eventos externos fica inerte e o calendário do grupo
+	// desenha exatamente o que desenhava antes.
+	calendariosExternos: [],
+	mostrarEventosExternos: true,
 	kanbanPropriedadesVisiveis: [],
 	listaPropriedadesVisiveis: [],
 	listaInboxPropriedadesVisiveis: [],
@@ -406,6 +468,8 @@ export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
 	grupos: [{ ...GRUPO_PADRAO }],
 	grupoAtivoKanbanId: null,
 	grupoAtivoCalendarioId: null,
+	cacheCalendariosExternos: [],
+	intervaloAtualizacaoMin: INTERVALO_ATUALIZACAO_PADRAO_MIN,
 };
 
 export function grupoPorId(configuracoes: ConfiguracoesGestorTarefas, id: string | null): GrupoTarefas | undefined {

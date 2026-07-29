@@ -57,6 +57,7 @@ export class VistaCalendarioAba extends ItemView {
 			filtro: (t) => tarefaPertenceAoGrupo(t, grupo, this.plugin.configuracoes),
 			configuracoesGlobais: this.plugin.configuracoes,
 			grupoAtivoId: grupo.id,
+			calendariosExternos: this.plugin.calendariosExternos,
 			aoTrocarGrupo: async (grupoId) => {
 				this.plugin.configuracoes.grupoAtivoCalendarioId = grupoId;
 				await this.plugin.salvarConfiguracoes();
@@ -64,6 +65,16 @@ export class VistaCalendarioAba extends ItemView {
 			},
 		});
 		this.motor.renderizar();
+
+		// Busca em segundo plano ao abrir: desenha na hora com o que está em cache e se redesenha
+		// sozinho quando a resposta chegar. Respeita o intervalo configurado (não busca a cada abertura).
+		void this.plugin.calendariosExternos.atualizarTodos();
+	}
+
+	// Redesenha só a grade, preservando modo/data/filtro que a usuária escolheu. Chamado pelo plugin
+	// quando uma agenda externa termina de atualizar.
+	redesenhar(): void {
+		this.motor?.renderizar();
 	}
 
 	private arquivoRelevante(arquivo: TAbstractFile): boolean {

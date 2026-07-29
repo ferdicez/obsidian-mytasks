@@ -40,8 +40,13 @@ import { contarReferenciasView } from "./localizador-referencias";
 import { ID_DATA_ENTRADA } from "./render-tarefa";
 import { SugestorArquivos } from "./sugestor-arquivos";
 import { CampoMetaBind, botaoAdicionarCampo, codigoParaColar, listarCamposMetaBind } from "./meta-bind-tarefa";
+import { ModalEditarCalendarioExterno } from "./modal-editar-calendario-externo";
 
 type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "nota" | "filtros" | "avancado";
+
+// Cores atribuídas às agendas externas por ordem de cadastro, pra duas não nascerem iguais.
+// A usuária pode trocar qualquer uma pelo seletor de cor na lista.
+const CORES_CALENDARIO_EXTERNO = ["#4285f4", "#e8710a", "#3f9142", "#a142f4", "#d93025", "#00838f"];
 
 const PAGINAS: { id: PaginaConfig; rotulo: string }[] = [
 	{ id: "geral", rotulo: "Geral" },
@@ -235,6 +240,173 @@ export class AbaConfiguracoes extends PluginSettingTab {
 					}).open();
 				})
 		);
+	}
+
+	// Agendas externas (Google via .ics) DESTE grupo — os compromissos aparecem no calendário do grupo,
+	// junto das tarefas dele. Fica na página "Calendário" do grupo, não na tela global: cada grupo é um
+	// contexto de trabalho próprio, e a agenda de um não deve poluir o calendário do outro.
+	private renderizarCalendariosExternos(containerEl: HTMLElement): void {
+		const grupo = this.grupo;
+		if (!grupo.calendariosExternos) grupo.calendariosExternos = [];
+
+		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
+		containerEl.createEl("h3", { text: "Agendas externas" });
+		containerEl.createEl("p", {
+			text: `Mostra os compromissos do Google Agenda no calendário de "${grupo.nome}", junto das tarefas deste grupo. Só leitura: nada é criado, editado ou apagado na sua agenda.`,
+			cls: "setting-item-description",
+		});
+
+		new Setting(containerEl)
+			.setName("Mostrar compromissos no calendário")
+			.setDesc("Desligue para esconder os compromissos deste grupo sem apagar as agendas cadastradas.")
+			.addToggle((toggle) =>
+				toggle.setValue(grupo.mostrarEventosExternos ?? true).onChange(async (valor) => {
+					grupo.mostrarEventosExternos = valor;
+					await this.plugin.salvarConfiguracoes();
+					this.plugin.redesenharCalendarios();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName("Buscar novidades a cada")
+			.setDesc(
+				"Em minutos, válido para todas as agendas de todos os grupos. O Google leva um tempo próprio para republicar a agenda (de alguns minutos a algumas horas), então um compromisso recém-criado pode demorar a aparecer aqui — isso não depende deste intervalo."
+			)
+			.addText((text) =>
+				text.setValue(String(this.plugin.configuracoes.intervaloAtualizacaoMin)).onChange(async (valor) => {
+					const minutos = parseInt(valor, 10);
+					if (Number.isNaN(minutos) || minutos < 1) return;
+					this.plugin.configuracoes.intervaloAtualizacaoMin = minutos;
+					await this.plugin.salvarConfiguracoes();
+				})
+			);
+
+		for (const calendario of grupo.calendariosExternos) {
+			const linha = new Setting(containerEl);
+
+			const preview = linha.nameEl.createSpan({ cls: "mytasks-config-grupo-icone" });
+			preview.createDiv({ cls: "mytasks-evento-cor" }).style.backgroundColor = calendario.cor;
+			linha.nameEl.createSpan({ text: calendario.nome || "(sem nome)" });
+
+			linha.addToggle((toggle) =>
+				toggle
+					.setTooltip("Mostrar esta agenda")
+					.setValue(calendario.ativo)
+					.onChange(async (valor) => {
+						calendario.ativo = valor;
+						await this.plugin.salvarConfiguracoes();
+						this.plugin.redesenharCalendarios();
+					})
+			);
+
+			linha.addColorPicker((picker) =>
+				picker.setValue(calendario.cor).onChange(async (valor) => {
+					calendario.cor = valor;
+					await this.plugin.salvarConfiguracoes();
+					this.plugin.redesenharCalendarios();
+					this.display();
+				})
+			);
+
+			linha.addButton((btn) =>
+				btn
+					.setIcon("pencil")
+					.setTooltip("Editar")
+					.onClick(() => this.abrirEdicaoCalendarioExterno(calendario.id))
+			);
+
+			linha.addButton((btn) =>
+				btn
+					.setIcon("refresh-cw")
+					.setTooltip("Atualizar agora")
+					.onClick(async () => {
+						new Notice(`Buscando "${calendario.nome}"…`);
+						const ok = await this.plugin.calendariosExternos.atualizarCalendario(calendario);
+						new Notice(ok ? "Agenda atualizada." : "Não consegui atualizar — veja o erro abaixo do nome.");
+						this.plugin.redesenharCalendarios();
+						this.display();
+					})
+			);
+
+			linha.addButton((btn) =>
+				btn
+					.setIcon("trash-2")
+					.setTooltip("Remover")
+					.onClick(async () => {
+						if (!confirm(`Remover a agenda "${calendario.nome}" deste grupo? Isso não apaga nada no Google.`)) return;
+						grupo.calendariosExternos = grupo.calendariosExternos.filter((c) => c.id !== calendario.id);
+						await this.plugin.salvarConfiguracoes();
+						// Depois de salvar: removerCache só descarta se nenhum outro grupo ainda assinar.
+						await this.plugin.calendariosExternos.removerCache(calendario.id);
+						this.plugin.redesenharCalendarios();
+						this.display();
+					})
+			);
+
+			// Linha de status abaixo do item: última busca bem-sucedida ou o erro da última tentativa.
+			const status = this.plugin.calendariosExternos.statusDe(calendario.id);
+			const statusEl = containerEl.createDiv({ cls: "mytasks-calendario-externo-status" });
+			if (status?.erro) {
+				statusEl.addClass("mytasks-calendario-externo-erro");
+				statusEl.setText(`Erro na última busca: ${status.erro}`);
+			} else if (status?.buscadoEm) {
+				statusEl.setText(`Atualizada em ${new Date(status.buscadoEm).toLocaleString()}`);
+			} else {
+				statusEl.setText("Ainda não buscada.");
+			}
+		}
+
+		new Setting(containerEl).addButton((btn) =>
+			btn.setButtonText("+ Adicionar agenda do Google").onClick(() => this.abrirEdicaoCalendarioExterno(null))
+		);
+
+		const ajuda = containerEl.createEl("p", { cls: "setting-item-description" });
+		ajuda.createEl("strong", { text: "Onde achar a URL: " });
+		ajuda.appendText(
+			"no Google Agenda, abra as configurações da agenda desejada → \"Integrar agenda\" → copie o \"Endereço secreto em formato iCal\". Esse endereço dá acesso de leitura à sua agenda para quem o tiver, então não compartilhe. Ele fica salvo apenas neste computador."
+		);
+	}
+
+	// Modal simples (nome + URL) para criar/editar uma agenda. Reaproveita o padrão de prompt do
+	// Obsidian em vez de uma classe Modal própria: são só dois campos.
+	private abrirEdicaoCalendarioExterno(calendarioId: string | null): void {
+		const grupo = this.grupo;
+		if (!grupo.calendariosExternos) grupo.calendariosExternos = [];
+		const existente = calendarioId ? grupo.calendariosExternos.find((c) => c.id === calendarioId) : null;
+
+		new ModalEditarCalendarioExterno(
+			this.app,
+			existente ? { nome: existente.nome, url: existente.url } : null,
+			async (dados) => {
+				if (existente) {
+					const urlMudou = existente.url !== dados.url;
+					existente.nome = dados.nome;
+					existente.url = dados.url;
+					await this.plugin.salvarConfiguracoes();
+					// URL nova invalida o cache: o conteúdo guardado é de outra agenda.
+					if (urlMudou) {
+						await this.plugin.calendariosExternos.removerCache(existente.id);
+						await this.plugin.calendariosExternos.atualizarCalendario(existente);
+					}
+				} else {
+					const novo = {
+						id: `cal_${Date.now()}`,
+						nome: dados.nome,
+						url: dados.url,
+						// Paleta fixa por posição, pra duas agendas não nascerem da mesma cor.
+						cor: CORES_CALENDARIO_EXTERNO[grupo.calendariosExternos.length % CORES_CALENDARIO_EXTERNO.length],
+						ativo: true,
+					};
+					grupo.calendariosExternos.push(novo);
+					await this.plugin.salvarConfiguracoes();
+					new Notice(`Buscando "${novo.nome}"…`);
+					const ok = await this.plugin.calendariosExternos.atualizarCalendario(novo);
+					new Notice(ok ? "Agenda adicionada." : "Agenda adicionada, mas a busca falhou — veja o erro na lista.");
+				}
+				this.plugin.redesenharCalendarios();
+				this.display();
+			}
+		).open();
 	}
 
 	private renderizarAbasPagina(container: HTMLElement): void {
@@ -491,7 +663,13 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				})
 			);
 
+		// Antes do early-return abaixo: as agendas externas não têm nada a ver com "mostrar detalhes
+		// nas tarefas", e some da tela se ficarem depois dele.
+		this.renderizarCalendariosExternos(containerEl);
+
 		if (!this.grupo.calendarioMostrarDetalhes) return;
+
+		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
 
 		for (const modo of MODOS_CALENDARIO) {
 			containerEl.createEl("h3", { text: ROTULOS_MODO[modo] });
