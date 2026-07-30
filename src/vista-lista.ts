@@ -1,7 +1,8 @@
-import { ItemView, TAbstractFile, ViewStateResult, WorkspaceLeaf } from "obsidian";
+import { ItemView, ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type MyTasksPlugin from "./main";
 import { GrupoTarefas, arquivoEhTarefaRelevante, configDoGrupo, grupoAtivoOuPrimeiro, tarefaPertenceAoGrupo } from "./tipos";
 import { MotorLista } from "./motor-lista";
+import { observarMudancasDoVault } from "./observador-vault";
 
 export const TIPO_VISTA_LISTA = "mytasks-lista";
 
@@ -47,11 +48,12 @@ export class VistaLista extends ItemView {
 	async onOpen() {
 		this.renderizar();
 
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (arquivo: TAbstractFile) => {
-				if (this.arquivoRelevante(arquivo)) this.motor?.renderizar();
-			})
-		);
+		observarMudancasDoVault({
+			app: this.app,
+			registerEvent: (ref) => this.registerEvent(ref),
+			ehRelevante: (caminho) => this.arquivoRelevante(caminho),
+			redesenhar: () => this.motor?.renderizar(),
+		});
 	}
 
 	private renderizar(): void {
@@ -75,8 +77,8 @@ export class VistaLista extends ItemView {
 		this.motor.renderizar();
 	}
 
-	private arquivoRelevante(arquivo: TAbstractFile): boolean {
-		return arquivoEhTarefaRelevante(configDoGrupo(this.plugin.configuracoes, this.grupoAtivo()), arquivo.path);
+	private arquivoRelevante(caminho: string): boolean {
+		return arquivoEhTarefaRelevante(configDoGrupo(this.plugin.configuracoes, this.grupoAtivo()), caminho);
 	}
 
 	async onClose() {

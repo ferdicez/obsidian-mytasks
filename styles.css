@@ -1020,6 +1020,24 @@
 	opacity: 0.55;
 }
 
+/* Marca de "agora": a linha de meia hora que contém o horário atual, só quando o dia visível é hoje.
+   Traço mais grosso na cor de destaque do tema (--interactive-accent segue a cor escolhida em
+   Aparência). Vem DEPOIS da regra de meia hora pra ganhar dela no desempate: sem isso a marca cairia
+   nas 14:30 tracejada e cinza. `solid` é reafirmado pelo mesmo motivo.
+   A borda cresce 1px pra dentro da linha (2px contra 1px das demais), diferença absorvida pelo
+   padding da célula — nenhuma linha muda de altura, então a grade não "pula" na virada da meia hora. */
+.mytasks-calendario-linha-hora.mytasks-calendario-linha-agora {
+	border-top: 2px solid var(--interactive-accent);
+}
+
+/* O rótulo da linha atual acompanha a marca: mesma cor e sem o apagamento da meia hora, senão o
+   "30" das 14:30 continuaria em --text-faint com opacity 0.55 embaixo de um traço colorido. */
+.mytasks-calendario-linha-agora .mytasks-calendario-rotulo-hora {
+	color: var(--interactive-accent);
+	font-weight: 600;
+	opacity: 1;
+}
+
 .mytasks-calendario-rotulo-hora {
 	font-size: 0.68em;
 	color: var(--text-faint);

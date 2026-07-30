@@ -97,6 +97,8 @@ export class MotorCalendario {
 	private diaExpandido: string | null = null;
 	private grupoFiltro: GrupoFiltro = grupoFiltroVazio();
 	private filtroSalvoId: string | null = null;
+	// Timer que faz a marca de "agora" do modo Dia andar sozinha (ver agendarMarcaDeAgora).
+	private timerAgora: number | null = null;
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorCalendario) {
 		this.modo = opcoes.modoInicial ?? "mes";
@@ -127,7 +129,37 @@ export class MotorCalendario {
 	}
 
 	destruir(): void {
-		// Nenhum listener fora do containerEl é registrado hoje; método existe para simetria de lifecycle.
+		// O único recurso fora do containerEl é o timer da marca de "agora" do modo Dia.
+		this.cancelarMarcaDeAgora();
+	}
+
+	// ---------- Marca de "agora" (modo Dia) ----------
+
+	// Redesenha o modo Dia quando o relógio vira a próxima meia hora, pra marca andar sozinha sem a
+	// usuária precisar reabrir a view. Usa setTimeout até a virada exata em vez de um intervalo fixo de
+	// 30 min: um intervalo criado às 14:12 dispararia às 14:42, doze minutos depois da hora que importa.
+	private agendarMarcaDeAgora(): void {
+		this.cancelarMarcaDeAgora();
+
+		const agora = new Date();
+		const proxima = new Date(agora);
+		// Próxima fronteira de meia hora: :30 se ainda não passou dela, senão :00 da hora seguinte.
+		proxima.setSeconds(0, 0);
+		if (agora.getMinutes() < 30) proxima.setMinutes(30);
+		else proxima.setMinutes(60);
+
+		this.timerAgora = window.setTimeout(() => {
+			this.timerAgora = null;
+			// Só redesenha se a view ainda estiver no modo Dia — trocar de modo antes da virada não
+			// deve forçar um render do modo novo.
+			if (this.modo === "semana-horarios") this.renderizar();
+		}, proxima.getTime() - agora.getTime());
+	}
+
+	private cancelarMarcaDeAgora(): void {
+		if (this.timerAgora === null) return;
+		window.clearTimeout(this.timerAgora);
+		this.timerAgora = null;
 	}
 
 	private tarefasFiltradas(): Tarefa[] {
@@ -520,8 +552,13 @@ export class MotorCalendario {
 	// cada uma com uma linha por hora. As quatro rolam juntas numa área só.
 	private desenharSemanaComHorarios(container: HTMLElement): void {
 		const tarefas = this.tarefasFiltradas();
+		const agora = new Date();
 		const diaStr = formatarData(this.dataReferencia);
-		const ehHoje = diaStr === formatarData(new Date());
+		const ehHoje = diaStr === formatarData(agora);
+		// Só faz sentido acompanhar o relógio quando o dia visível é hoje — navegando pra outra data,
+		// o timer anterior é descartado e nenhum novo é criado.
+		if (ehHoje) this.agendarMarcaDeAgora();
+		else this.cancelarMarcaDeAgora();
 
 		const tarefasDoDia = tarefas.filter((t) => t.data === diaStr);
 		const eventosDoDia = this.eventosPorDia(this.dataReferencia, this.dataReferencia).get(diaStr) ?? [];
@@ -588,6 +625,14 @@ export class MotorCalendario {
 					// completo continua em `horarioClique` — é o que vai pro clique e pro arrastar.
 					const rotuloHora = minuto === 0 ? String(hora).padStart(2, "0") : "30";
 					linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: rotuloHora });
+
+					// Marca de "agora": só no dia de hoje, na linha de meia hora que contém o horário atual
+					// (14:12 → linha das 14:00; 14:47 → linha das 14:30). A cor vem de --interactive-accent,
+					// então acompanha o tema/cor de destaque escolhido em Aparência. O timer que redesenha
+					// a cada meia hora fica em agendarMarcaDeAgora().
+					if (ehHoje && hora === agora.getHours() && (minuto === 0) === (agora.getMinutes() < 30)) {
+						linha.addClass("mytasks-calendario-linha-agora");
+					}
 
 					const celulaHora = linha.createDiv({ cls: "mytasks-calendario-celula-hora" });
 					// Cada item cai numa única linha: minuto < 30 na linha cheia, >= 30 na de meia hora.

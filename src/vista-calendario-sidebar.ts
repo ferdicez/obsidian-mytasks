@@ -1,7 +1,8 @@
-import { ItemView, TAbstractFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, WorkspaceLeaf } from "obsidian";
 import type MyTasksPlugin from "./main";
 import { GrupoTarefas, arquivoEhTarefaRelevante, configDoGrupo, grupoAtivoOuPrimeiro, tarefaPertenceAoGrupo } from "./tipos";
 import { MotorCalendario } from "./motor-calendario";
+import { observarMudancasDoVault } from "./observador-vault";
 
 export const TIPO_VISTA_CALENDARIO_SIDEBAR = "mytasks-calendario-sidebar";
 
@@ -31,11 +32,12 @@ export class VistaCalendarioSidebar extends ItemView {
 	async onOpen() {
 		this.renderizar();
 
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (arquivo: TAbstractFile) => {
-				if (this.arquivoRelevante(arquivo)) this.motor?.renderizar();
-			})
-		);
+		observarMudancasDoVault({
+			app: this.app,
+			registerEvent: (ref) => this.registerEvent(ref),
+			ehRelevante: (caminho) => this.arquivoRelevante(caminho),
+			redesenhar: () => this.motor?.renderizar(),
+		});
 	}
 
 	private renderizar(): void {
@@ -76,8 +78,8 @@ export class VistaCalendarioSidebar extends ItemView {
 		this.motor?.renderizar();
 	}
 
-	private arquivoRelevante(arquivo: TAbstractFile): boolean {
-		return arquivoEhTarefaRelevante(configDoGrupo(this.plugin.configuracoes, this.grupoAtivo()), arquivo.path);
+	private arquivoRelevante(caminho: string): boolean {
+		return arquivoEhTarefaRelevante(configDoGrupo(this.plugin.configuracoes, this.grupoAtivo()), caminho);
 	}
 
 	async onClose() {

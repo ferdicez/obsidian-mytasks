@@ -1,8 +1,9 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild, TAbstractFile, TFile } from "obsidian";
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild } from "obsidian";
 import { ConfigEfetivaGrupo, arquivoEhTarefaRelevante } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { MotorKanban } from "./motor-kanban";
 import { compilarBlocoKanban } from "./filtro-kanban";
+import { observarMudancasDoVault } from "./observador-vault";
 
 export const LINGUAGEM_BLOCO_KANBAN = "mytasks-kanban";
 
@@ -35,20 +36,16 @@ class EmbedKanban extends MarkdownRenderChild {
 
 	onload(): void {
 		this.motor.renderizar();
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (arquivo: TAbstractFile) => {
-				if (this.arquivoRelevante(arquivo)) this.motor.renderizar();
-			})
-		);
+		observarMudancasDoVault({
+			app: this.app,
+			registerEvent: (ref) => this.registerEvent(ref),
+			ehRelevante: (caminho) => arquivoEhTarefaRelevante(this.obterConfiguracoes(), caminho),
+			redesenhar: () => this.motor.renderizar(),
+		});
 	}
 
 	onunload(): void {
 		this.motor.destruir();
-	}
-
-	private arquivoRelevante(arquivo: TAbstractFile): boolean {
-		if (!(arquivo instanceof TFile)) return false;
-		return arquivoEhTarefaRelevante(this.obterConfiguracoes(), arquivo.path);
 	}
 }
 
