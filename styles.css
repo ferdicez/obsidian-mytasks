@@ -930,11 +930,15 @@
 
 /* Dia — 4 colunas: sem horário | manhã | tarde | noite */
 
-/* As quatro colunas dividem a largura igualmente e rolam JUNTAS (a rolagem é do grade-area em volta),
-   pra que as linhas de hora das três faixas fiquem sempre alinhadas entre si na tela. */
+/* As quatro colunas rolam JUNTAS (a rolagem é do grade-area em volta), pra que as linhas de hora das
+   três faixas fiquem sempre alinhadas entre si na tela.
+   A largura NÃO é igual entre elas: "sem horário" fica em 70% do que teria numa divisão igual e as
+   três faixas em 110% cada — as faixas é que precisam de espaço (cabem cartão de tarefa e compromisso
+   na mesma linha de hora), enquanto "sem horário" é uma pilha de cartões soltos. As frações são
+   relativas, então a soma não precisar bater 100%: 0.7 + 1.1×3 = 4.0 continua ocupando a largura toda. */
 .mytasks-calendario-grade-dia {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: minmax(0, 0.7fr) repeat(3, minmax(0, 1.1fr));
 	/* align-content: start impede o grid de esticar as colunas até o fim da área rolável quando o
 	   conteúdo é mais curto que ela — sem isso sobra um bloco vazio embaixo das linhas de hora. */
 	align-content: start;

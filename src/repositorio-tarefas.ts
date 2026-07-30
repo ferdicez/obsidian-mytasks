@@ -573,9 +573,16 @@ export class RepositorioTarefas {
 		const config = this.obterConfiguracoes();
 		const { status, dataTarefa } = config;
 		const chaveData = dataTarefa.chave ?? "data";
+		const chaveHorario = config.chavesFixas.horario;
 		await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
 			fm[config.status.chave || "status"] = opcaoStatusComData(status) ?? tarefa.status;
 			fm[chaveData] = novaData;
+			// A próxima ocorrência nasce SEM horário — o horário posto numa ocorrência vale só para
+			// ela. Aqui o mesmo arquivo é reescrito, então a chave precisa ser esvaziada à mão; sem
+			// isso o horário da ocorrência concluída seguiria para a seguinte.
+			// Esvaziada, não deletada: a chave presente e vazia é o que mantém o INPUT[time:...] da
+			// nota modelo funcionando (o Meta Bind só escreve em chave que já existe).
+			if (chaveHorario in fm) fm[chaveHorario] = null;
 		});
 	}
 
@@ -607,7 +614,9 @@ export class RepositorioTarefas {
 		const arquivoNovo = await this.criarTarefa(tarefa.titulo, {
 			status: opcaoStatusComData(status) ?? tarefa.status,
 			data: novaData,
-			horario: tarefa.horario,
+			// Sem horário de propósito: a próxima ocorrência nasce como a tarefa recorrente foi
+			// criada. Horário posto numa ocorrência é dela só, não se propaga para as seguintes.
+			horario: null,
 			recorrencia: tarefa.recorrencia,
 			manterHistorico: tarefa.manterHistorico,
 			recorrenciaDataFim: tarefa.recorrenciaDataFim,
