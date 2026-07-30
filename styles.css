@@ -993,10 +993,13 @@
 	flex-direction: column;
 }
 
-/* Cada hora é uma linha de altura fixa: rótulo estreito à esquerda, célula solta à direita. */
+/* Cada hora é uma linha de altura fixa: rótulo estreito à esquerda, célula solta à direita.
+   Os 26px são medida do rótulo curto de 2 caracteres ("06" / "30"). Eram 46px quando o rótulo
+   trazia o horário inteiro ("06:00") — se algum dia o rótulo voltar a ser completo, este número
+   precisa voltar junto, senão o texto quebra. */
 .mytasks-calendario-linha-hora {
 	display: grid;
-	grid-template-columns: 46px minmax(0, 1fr);
+	grid-template-columns: 26px minmax(0, 1fr);
 	height: var(--mytasks-altura-hora, 48px);
 	border-top: 1px solid var(--gt-borda-fraca);
 }
@@ -1021,7 +1024,7 @@
 	font-size: 0.68em;
 	color: var(--text-faint);
 	text-align: right;
-	padding: 5px 8px 0 0;
+	padding: 5px 5px 0 0;
 }
 
 .mytasks-calendario-celula-hora {

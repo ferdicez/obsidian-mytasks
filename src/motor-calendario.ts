@@ -583,7 +583,11 @@ export class MotorCalendario {
 					const linha = corpoFaixa.createDiv({ cls: "mytasks-calendario-linha-hora" });
 					if (minuto === 30) linha.addClass("mytasks-calendario-linha-meia-hora");
 					const horarioClique = `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
-					linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: horarioClique });
+					// Rótulo enxuto pra coluna de hora ficar estreita e sobrar largura pros cartões:
+					// hora cheia mostra só a hora ("06"), meia hora só os minutos ("30"). O horário
+					// completo continua em `horarioClique` — é o que vai pro clique e pro arrastar.
+					const rotuloHora = minuto === 0 ? String(hora).padStart(2, "0") : "30";
+					linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: rotuloHora });
 
 					const celulaHora = linha.createDiv({ cls: "mytasks-calendario-celula-hora" });
 					// Cada item cai numa única linha: minuto < 30 na linha cheia, >= 30 na de meia hora.
