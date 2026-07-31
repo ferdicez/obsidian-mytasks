@@ -122,9 +122,22 @@ export class MotorLista {
 		return base;
 	}
 
+	// Posição da tarefa na lista de opções de Status (a ordem configurada em Configurações → Status:
+	// Inbox, Fazer, ..., Concluído). É o critério de ordenação MAIS FORTE, acima do aviso de prazo:
+	// marcar como concluída deve mandar a tarefa pro fim da lista, não jogá-la pro topo. Status
+	// desconhecido (valor removido das opções) vai pro fim, junto das concluídas, em vez de pro topo.
+	private posicaoStatus(tarefa: Tarefa): number {
+		const opcoes = this.opcoes.configuracoes.status.opcoes;
+		const indice = opcoes.findIndex((o) => o.valor === tarefa.status);
+		return indice === -1 ? opcoes.length : indice;
+	}
+
 	private ordenar(tarefas: Tarefa[]): Tarefa[] {
 		const hoje = new Date();
 		return [...tarefas].sort((a, b) => {
+			const statusA = this.posicaoStatus(a);
+			const statusB = this.posicaoStatus(b);
+			if (statusA !== statusB) return statusA - statusB;
 			const avisoA = emPeriodoDeAviso(a, hoje) ? 0 : 1;
 			const avisoB = emPeriodoDeAviso(b, hoje) ? 0 : 1;
 			if (avisoA !== avisoB) return avisoA - avisoB;

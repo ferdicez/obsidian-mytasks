@@ -10,7 +10,9 @@ import {
 	Tarefa,
 	clonarGrupoFiltro,
 	grupoFiltroVazio,
+	inicioDaJanelaDeTarefa,
 	obterFiltroSalvo,
+	tarefaOcupaDia,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ID_DATA, ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA, OpcoesCartaoTarefa } from "./render-tarefa";
@@ -169,6 +171,43 @@ export class MotorCalendario {
 		return filtroFixo.filter(filtroInterativo);
 	}
 
+	// Único ponto de verdade de "esta tarefa cai neste dia?" para os quatro modos. Com a antecipação
+	// desligada é literalmente `t.data === diaIso` (o que cada modo fazia à mão antes); ligada, a tarefa
+	// ocupa também os dias de antecedência. Centralizado de propósito: eram quatro cópias da comparação,
+	// e mudar só algumas deixaria a antecipação valendo no Mês e não no Dia, por exemplo.
+	private ocupaDia(tarefa: Tarefa, diaIso: string): boolean {
+		return tarefaOcupaDia(tarefa, diaIso, this.opcoes.configuracoes.anteciparPendencias);
+	}
+
+	// Todos os dias (ISO) que a tarefa ocupa dentro da janela desenhada — usado pelos modos que indexam
+	// as tarefas por dia de uma vez só (Mês e Ano) em vez de filtrar dia a dia.
+	private diasOcupados(tarefa: Tarefa, inicioJanela: string, fimJanela: string): string[] {
+		const prazo = tarefa.data;
+		if (!prazo) return [];
+		const inicioTarefa = inicioDaJanelaDeTarefa(tarefa, this.opcoes.configuracoes.anteciparPendencias);
+		if (!inicioTarefa) return [];
+
+		// Recorta a janela da tarefa pela janela desenhada: uma tarefa com 90 dias de antecedência não
+		// deve gerar 90 entradas quando só 42 dias estão na tela.
+		const de = inicioTarefa < inicioJanela ? inicioJanela : inicioTarefa;
+		const ate = prazo > fimJanela ? fimJanela : prazo;
+		if (de > ate) return [];
+
+		const dias: string[] = [];
+		const [ano, mes, dia] = de.split("-").map(Number);
+		const cursor = new Date(ano, mes - 1, dia);
+		for (;;) {
+			const a = cursor.getFullYear();
+			const m = String(cursor.getMonth() + 1).padStart(2, "0");
+			const d = String(cursor.getDate()).padStart(2, "0");
+			const iso = `${a}-${m}-${d}`;
+			if (iso > ate) break;
+			dias.push(iso);
+			cursor.setDate(cursor.getDate() + 1);
+		}
+		return dias;
+	}
+
 	// Eventos externos da janela pedida, indexados por dia (AAAA-MM-DD) e já ordenados por horário.
 	// Os filtros do calendário NÃO se aplicam aqui: eles comparam propriedades de tarefa (status,
 	// grupo, prazo), que um compromisso do Google não tem. O interruptor geral em Configurações é o
@@ -228,7 +267,7 @@ export class MotorCalendario {
 		const botaoAnterior = navegacao.createEl("button", { text: "‹" });
 		botaoAnterior.addEventListener("click", () => this.navegar(-1));
 
-		const botaoHoje = navegacao.createEl("button", { text: "Hoje" });
+		const botaoHoje = navegacao.createEl("button", { text: "Hoje", cls: "mytasks-calendario-botao-hoje" });
 		botaoHoje.addEventListener("click", () => {
 			this.dataReferencia = new Date();
 			this.renderizar();
@@ -363,13 +402,6 @@ export class MotorCalendario {
 
 	private desenharMes(container: HTMLElement): void {
 		const tarefas = this.tarefasFiltradas();
-		const porDia = new Map<string, Tarefa[]>();
-		for (const tarefa of tarefas) {
-			const data = tarefa.data!;
-			if (!porDia.has(data)) porDia.set(data, []);
-			porDia.get(data)!.push(tarefa);
-		}
-
 		const grade = container.createDiv({ cls: "mytasks-calendario-grade-mes" });
 
 		for (const nome of NOMES_DIA_SEMANA_COMPLETO) {
@@ -387,6 +419,18 @@ export class MotorCalendario {
 		const fimGrade = new Date(inicioGrade);
 		fimGrade.setDate(fimGrade.getDate() + 41);
 		const eventosPorDia = this.eventosPorDia(inicioGrade, fimGrade);
+
+		// Indexado DEPOIS da janela ser conhecida: com antecipação, uma tarefa entra em vários dias, e o
+		// recorte pela grade evita expandir dias que nem estão na tela.
+		const inicioGradeStr = formatarData(inicioGrade);
+		const fimGradeStr = formatarData(fimGrade);
+		const porDia = new Map<string, Tarefa[]>();
+		for (const tarefa of tarefas) {
+			for (const diaOcupado of this.diasOcupados(tarefa, inicioGradeStr, fimGradeStr)) {
+				if (!porDia.has(diaOcupado)) porDia.set(diaOcupado, []);
+				porDia.get(diaOcupado)!.push(tarefa);
+			}
+		}
 
 		for (let i = 0; i < 42; i++) {
 			const dia = new Date(inicioGrade);
@@ -526,7 +570,7 @@ export class MotorCalendario {
 			coluna.addEventListener("contextmenu", (evento) => this.abrirMenuNovaTarefa(evento, diaStr));
 			this.registrarAlvoDeSoltura(coluna, diaStr);
 
-			const tarefasDoDia = tarefas.filter((t) => t.data === diaStr);
+			const tarefasDoDia = tarefas.filter((t) => this.ocupaDia(t, diaStr));
 			const itensDoDia = this.ordenarItensDoDia(tarefasDoDia, eventosPorDia.get(diaStr) ?? []);
 			for (const item of itensDoDia) {
 				if (item.tipo === "evento") {
@@ -560,7 +604,7 @@ export class MotorCalendario {
 		if (ehHoje) this.agendarMarcaDeAgora();
 		else this.cancelarMarcaDeAgora();
 
-		const tarefasDoDia = tarefas.filter((t) => t.data === diaStr);
+		const tarefasDoDia = tarefas.filter((t) => this.ocupaDia(t, diaStr));
 		const eventosDoDia = this.eventosPorDia(this.dataReferencia, this.dataReferencia).get(diaStr) ?? [];
 
 		const grade = container.createDiv({ cls: "mytasks-calendario-grade-dia" });
@@ -627,9 +671,10 @@ export class MotorCalendario {
 					linha.createDiv({ cls: "mytasks-calendario-rotulo-hora", text: rotuloHora });
 
 					// Marca de "agora": só no dia de hoje, na linha de meia hora que contém o horário atual
-					// (14:12 → linha das 14:00; 14:47 → linha das 14:30). A cor vem de --interactive-accent,
-					// então acompanha o tema/cor de destaque escolhido em Aparência. O timer que redesenha
-					// a cada meia hora fica em agendarMarcaDeAgora().
+					// (14:12 → linha das 14:00; 14:47 → linha das 14:30). O CSS desenha um contorno fechado
+					// em volta dessa faixa. A cor vem de --interactive-accent, então acompanha o tema/cor de
+					// destaque escolhido em Aparência. O timer que redesenha a cada meia hora fica em
+					// agendarMarcaDeAgora().
 					if (ehHoje && hora === agora.getHours() && (minuto === 0) === (agora.getMinutes() < 30)) {
 						linha.addClass("mytasks-calendario-linha-agora");
 					}
@@ -671,13 +716,14 @@ export class MotorCalendario {
 
 	private desenharAno(container: HTMLElement): void {
 		const tarefas = this.tarefasFiltradas();
+		const ano = this.dataReferencia.getFullYear();
 		const contagemPorDia = new Map<string, number>();
 		for (const tarefa of tarefas) {
-			const data = tarefa.data!;
-			contagemPorDia.set(data, (contagemPorDia.get(data) ?? 0) + 1);
+			for (const diaOcupado of this.diasOcupados(tarefa, `${ano}-01-01`, `${ano}-12-31`)) {
+				contagemPorDia.set(diaOcupado, (contagemPorDia.get(diaOcupado) ?? 0) + 1);
+			}
 		}
 
-		const ano = this.dataReferencia.getFullYear();
 		const grade = container.createDiv({ cls: "mytasks-calendario-grade-ano" });
 
 		// Janela do ano inteiro: uma expansão só, reaproveitada pelos doze mini-meses.

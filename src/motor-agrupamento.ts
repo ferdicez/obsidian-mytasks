@@ -9,6 +9,11 @@ export interface ClusterAgrupamento {
 	tarefas: Tarefa[];
 }
 
+// Chave do cluster que reúne quem não tem valor na propriedade agrupada. Exportada porque o Kanban
+// precisa reconhecê-la ao soltar um cartão nessa seção (soltar em "outros" LIMPA a propriedade, em
+// vez de gravar esta string no frontmatter).
+export const CHAVE_SEM_VALOR = "__sem_valor__";
+
 const NOMES_DIA_SEMANA_COMPLETO = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const NOMES_MES = [
 	"janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -69,7 +74,7 @@ export function agruparTarefas(
 			.map((valor) => ({ chave: valor, rotulo: rotular(valor), tarefas: porValor.get(valor)! }));
 
 		if (semValor.length > 0) {
-			grupos.push({ chave: "__sem_valor__", rotulo: "outros", tarefas: semValor });
+			grupos.push({ chave: CHAVE_SEM_VALOR, rotulo: "outros", tarefas: semValor });
 		}
 		return grupos;
 	}

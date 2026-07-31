@@ -313,6 +313,10 @@ export interface ConfigEfetivaGrupo {
 	propriedades: PropriedadeDefinida[];
 	destaques: ConfigDestaques;
 	corAviso: string;
+	// Faz a tarefa APARECER nos dias de antecedência (filtros de prazo e calendário), em vez de só mudar
+	// de cor no dia do prazo. Ver inicioDaJanelaDeTarefa/tarefaOcupaDia. Desligado por padrão: ligar muda
+	// o que já aparece nas views de quem usa "avisar com antecedência", então é escolha do grupo.
+	anteciparPendencias: boolean;
 	// Liga/desliga a funcionalidade de recorrência inteira pra este grupo — some do modal de editar
 	// tarefa, dos campos oferecidos pra nota (Configurações → Nota de tarefa) e do ícone no card.
 	recorrenciaAtiva: boolean;
@@ -437,6 +441,7 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	propriedades: [],
 	destaques: {},
 	corAviso: "#e03131",
+	anteciparPendencias: false,
 	recorrenciaAtiva: true,
 	calendarioMostrarDetalhes: true,
 	calendarioPropriedadesVisiveisPorModo: {
@@ -720,4 +725,53 @@ export function faseDeAviso(tarefa: Tarefa, hoje: Date): FaseAviso | null {
 
 export function emPeriodoDeAviso(tarefa: Tarefa, hoje: Date): boolean {
 	return faseDeAviso(tarefa, hoje) !== null;
+}
+
+// ---------- Antecipação: a tarefa OCUPA os dias de aviso, não só o dia do prazo ----------
+//
+// A "avisar com antecedência" original só trocava a COR do cartão no dia do prazo — a tarefa continuava
+// existindo em um único dia (o do prazo) para filtros e calendário. Resultado prático: abrir "pendências
+// de hoje" no dia 7 não lembrava de nada que vence no dia 10, que é justamente o que a antecedência
+// deveria fazer.
+//
+// Com `anteciparPendencias` ligado no grupo, a tarefa passa a ocupar a JANELA [prazo − antecedência, prazo]
+// em vez de um ponto. Nada é gravado no frontmatter: a janela é derivada de `data` + `diasAntecedenciaAviso`
+// a cada leitura, então mudar o prazo ou a antecedência a reajusta na hora, e os dias já vencidos saem
+// sozinhos (a janela termina no prazo, e o dia de hoje só anda pra frente).
+
+// Data (ISO) em que a tarefa começa a aparecer: o prazo, ou o início da antecedência quando ela existe.
+// Sem antecedência — ou com o recurso desligado no grupo — devolve o próprio prazo, e todo o comportamento
+// anterior é preservado byte a byte.
+export function inicioDaJanelaDeTarefa(tarefa: Tarefa, anteciparAtivo: boolean): string | null {
+	if (!tarefa.data) return null;
+	if (!anteciparAtivo) return tarefa.data;
+	if (!tarefa.diasAntecedenciaAviso || tarefa.diasAntecedenciaAviso <= 0) return tarefa.data;
+
+	const [ano, mes, dia] = tarefa.data.split("-").map(Number);
+	const inicio = new Date(ano, mes - 1, dia);
+	inicio.setDate(inicio.getDate() - tarefa.diasAntecedenciaAviso);
+	const a = inicio.getFullYear();
+	const m = String(inicio.getMonth() + 1).padStart(2, "0");
+	const d = String(inicio.getDate()).padStart(2, "0");
+	return `${a}-${m}-${d}`;
+}
+
+// A tarefa ocupa o dia `diaIso`? Com o recurso desligado (ou sem antecedência) isto é exatamente a
+// comparação `tarefa.data === diaIso` que o calendário sempre fez — por isso substitui as quatro cópias
+// dela sem mudar o desenho de nenhum grupo que não ligou a opção.
+export function tarefaOcupaDia(tarefa: Tarefa, diaIso: string, anteciparAtivo: boolean): boolean {
+	if (!tarefa.data) return false;
+	const inicio = inicioDaJanelaDeTarefa(tarefa, anteciparAtivo);
+	if (inicio === null) return false;
+	return diaIso >= inicio && diaIso <= tarefa.data;
+}
+
+// Quantos dias faltam para o prazo a partir de `hoje`. Negativo = prazo já passou. Usado só para rotular
+// o lembrete ("em 3 dias"); a decisão de mostrar ou não é de tarefaOcupaDia.
+export function diasAteOPrazo(tarefa: Tarefa, hoje: Date): number | null {
+	if (!tarefa.data) return null;
+	const [ano, mes, dia] = tarefa.data.split("-").map(Number);
+	const prazo = new Date(ano, mes - 1, dia);
+	const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+	return Math.round((prazo.getTime() - hojeSemHora.getTime()) / 86400000);
 }

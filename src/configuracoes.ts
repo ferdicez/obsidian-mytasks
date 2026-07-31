@@ -498,6 +498,18 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("Antecipar pendências")
+			.setDesc(
+				"Faz a tarefa APARECER nos dias de antecedência, não só ficar colorida no dia do prazo. Prazo dia 10 com 3 dias de antecedência: ela já aparece nas listas e no calendário a partir do dia 7, esmaecida e com um sino indicando quantos dias faltam, e sai sozinha dos dias que passam. Nada é gravado nas notas."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.grupo.anteciparPendencias).onChange(async (valor) => {
+					this.grupo.anteciparPendencias = valor;
+					await this.plugin.salvarConfiguracoes();
+				})
+			);
+
+		new Setting(containerEl)
 			.setName("Recorrência")
 			.setDesc(
 				"Desligar remove o campo Recorrência (e Repetir até) do modal de editar tarefa, da nota criada por \"Nova tarefa\" e o ícone de recorrência no card — este grupo passa a se comportar como se recorrência não existisse."

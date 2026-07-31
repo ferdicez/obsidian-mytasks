@@ -211,6 +211,18 @@
 	border-left: none;
 }
 
+/* Lembrete antecipado: a tarefa está aparecendo num dia que NÃO é o do prazo (só quando
+   "antecipar pendências" está ligado no grupo). O título esmaecido é o sinal de que ela
+   "ainda não está aqui" — é lembrete, não trabalho de hoje. */
+.mytasks-item-lembrete .mytasks-titulo {
+	color: var(--text-muted);
+}
+
+/* O sino do lembrete usa .mytasks-icone-recorrencia (mesmo canto do cartão, mesma cor e
+   tamanho — ver render-tarefa.ts). Só um dos dois aparece por vez: nos dias de antecedência
+   o sino substitui a recorrência; no dia do prazo a recorrência volta. O "em N dias" fica na
+   linha de meta, como última propriedade. */
+
 .mytasks-titulo {
 	transition: color 0.15s ease;
 }
@@ -422,6 +434,12 @@
 	display: inline-flex;
 	align-items: center;
 	color: var(--text-muted);
+	/* Reserva o espaço do ícone mesmo sem SVG dentro. A regra de tamanho abaixo vale só pro <svg>,
+	   então um nome de ícone inexistente nesta versão do Obsidian (setIcon falha em silêncio)
+	   colapsava o span pra largura zero e o botão virava uma pastilha vazia. */
+	min-width: 13px;
+	min-height: 13px;
+	justify-content: center;
 }
 
 .mytasks-seletor-discreto-icone svg,
@@ -628,7 +646,10 @@
 	/* Mesmo cinza dos outros botões do cabeçalho (não o --background-secondary, que em vários temas
 	   fica quase igual ao --background-primary da pastilha ativa e apagava o contraste). */
 	background: var(--background-modifier-border);
-	border: 1px solid var(--gt-borda);
+	/* Transparente, não ausente: mantém a mesma caixa dos botões discretos do cabeçalho (que também
+	   usam 1px transparente), então o bloco continua com a altura e o alinhamento certos sem borda
+	   visível. Era o único controle do cabeçalho com contorno — destoava do filtro ao lado. */
+	border: 1px solid transparent;
 	border-radius: 8px;
 	padding: 2px;
 }
@@ -672,7 +693,8 @@
 	gap: 2px;
 	height: var(--mytasks-altura-controle);
 	background: var(--background-secondary);
-	border: 1px solid var(--gt-borda);
+	/* Mesma decisão do bloco de abas acima: sem contorno, pra não destoar dos botões do cabeçalho. */
+	border: 1px solid transparent;
 	border-radius: 8px;
 	padding: 2px;
 }
@@ -686,8 +708,17 @@
 	box-shadow: none;
 	border-radius: 6px;
 	font-size: 0.85em;
+	/* O texto do botão é "Hoje" com maiúscula no código — o lowercase é feito aqui, no CSS, em vez
+	   de mudar a string (que também é o rótulo lido em voz alta). Nas setas ‹ › é inócuo. */
+	text-transform: lowercase;
 	color: var(--text-normal);
 	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Só o "Hoje" ganha o peso da aba ativa do bloco ao lado (.mytasks-calendario-aba-modo-ativa).
+   Aplicar em todos os botões da navegação engrossaria também as setas ‹ ›, que não foram pedidas. */
+.mytasks-calendario-botao-hoje {
+	font-weight: 600;
 }
 
 .mytasks-calendario-navegacao button:hover {
@@ -1020,20 +1051,45 @@
 	opacity: 0.55;
 }
 
-/* Marca de "agora": a linha de meia hora que contém o horário atual, só quando o dia visível é hoje.
-   Traço mais grosso na cor de destaque do tema (--interactive-accent segue a cor escolhida em
-   Aparência). Vem DEPOIS da regra de meia hora pra ganhar dela no desempate: sem isso a marca cairia
-   nas 14:30 tracejada e cinza. `solid` é reafirmado pelo mesmo motivo.
-   A borda cresce 1px pra dentro da linha (2px contra 1px das demais), diferença absorvida pelo
-   padding da célula — nenhuma linha muda de altura, então a grade não "pula" na virada da meia hora. */
+/* Marca de "agora": CONTORNO FECHADO em volta da faixa de 30 min que contém o horário atual, só
+   quando o dia visível é hoje (12:40 contorna o bloco das 12:30; 13:10, o das 13:00). Antes era só
+   um traço no topo — o contorno inteiro lê como "o agora está AQUI DENTRO", em vez de marcar uma
+   fronteira entre duas faixas.
+
+   Vem DEPOIS da regra de meia hora pra ganhar dela no desempate: sem isso a marca cairia nas 14:30
+   tracejada e cinza.
+
+   O contorno abraça a LINHA INTEIRA — rótulo da hora incluído, não só a célula dos cartões. O bloco
+   de 30 min é a linha toda, e é assim que ela pediu (chegou a existir uma versão contornando só a
+   célula; o número ficava de fora do bloco).
+
+   `outline`, NÃO `border`: outline é desenhado por fora do box e não ocupa espaço no layout, então
+   a linha não muda de altura nem empurra as vizinhas — a grade não "pula" na virada da meia hora.
+   Com border nos 4 lados seria preciso compensar 2px na altura E na largura pra manter isso.
+   `outline-offset: -2px` traz o traço pra dentro da própria linha, senão ele invadiria a faixa de
+   cima (que já tem a divisória dela ali) e o contorno apareceria deslocado. */
 .mytasks-calendario-linha-hora.mytasks-calendario-linha-agora {
-	border-top: 2px solid var(--interactive-accent);
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+	border-radius: 4px;
+}
+
+/* A divisória cinza da própria linha e a da linha seguinte cruzariam o contorno em cima e embaixo,
+   deixando um traço encostado no colorido. */
+.mytasks-calendario-linha-hora.mytasks-calendario-linha-agora,
+.mytasks-calendario-linha-agora + .mytasks-calendario-linha-hora {
+	border-top-color: transparent;
 }
 
 /* O rótulo da linha atual acompanha a marca: mesma cor e sem o apagamento da meia hora, senão o
-   "30" das 14:30 continuaria em --text-faint com opacity 0.55 embaixo de um traço colorido. */
+   "30" das 14:30 continuaria em --text-faint com opacity 0.55 embaixo de um traço colorido.
+   Os dois paddings tiram o número de baixo do contorno, que corre 2px por dentro da linha: sem eles
+   o traço de cima passa rente ao topo do dígito (o rótulo tem só 5px de padding-top) e o da esquerda
+   raspa nele (o rótulo é alinhado à direita numa coluna de 26px). */
 .mytasks-calendario-linha-agora .mytasks-calendario-rotulo-hora {
 	color: var(--interactive-accent);
+	padding-top: 8px;
+	padding-left: 4px;
 	font-weight: 600;
 	opacity: 1;
 }
@@ -1235,6 +1291,43 @@
 
 .mytasks-kanban-alvo-soltura {
 	background: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+}
+
+/* Seções de subagrupamento dentro de uma coluna do Kanban (ex: agrupar por status e, dentro de
+   cada coluna, separar por etiqueta). O cabeçalho reusa a estética pedida: fundo cinza, nome mais
+   escuro que o corpo, texto à esquerda e o MESMO raio do cartão de tarefa no hover (.mytasks-item). */
+.mytasks-kanban-secao {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* O gap da lista da coluna já separa as seções; esta margem afasta um pouco mais o cabeçalho da
+   seção anterior, sem afetar a primeira (que já encosta no cabeçalho da coluna). */
+.mytasks-kanban-secao + .mytasks-kanban-secao {
+	margin-top: 8px;
+}
+
+.mytasks-kanban-cabecalho-secao {
+	font-size: 0.78em;
+	font-weight: 600;
+	color: var(--text-normal);
+	text-align: left;
+	background: var(--background-secondary);
+	border-radius: 6px;
+	padding: 3px 8px;
+}
+
+.mytasks-kanban-lista-secao {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* A seção é um bloco pequeno dentro da coluna: sem raio, o realce de soltura ficaria um retângulo
+   chapado colado nos cartões. Mesmo raio do cabeçalho da seção e do cartão. */
+.mytasks-kanban-secao.mytasks-kanban-alvo-soltura {
+	border-radius: 6px;
 }
 
 /* ===== Grupos de tarefas ===== */

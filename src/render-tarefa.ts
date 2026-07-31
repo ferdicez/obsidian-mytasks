@@ -6,6 +6,7 @@ import {
 	PropriedadeDefinida,
 	Tarefa,
 	corDeDestaquePorEstilo,
+	diasAteOPrazo,
 	faseDeAviso,
 	ultimaOpcaoStatus,
 } from "./tipos";
@@ -78,7 +79,16 @@ export function desenharCartaoTarefa(
 	const item = container.createDiv({ cls: "mytasks-item" });
 	if (estaConcluida) item.addClass("mytasks-item-feito");
 
-	if (arrastavel) {
+	// Com a antecipação ligada, a tarefa aparece em dias que NÃO são o do prazo — então o cartão precisa
+	// dizer que aquilo ainda não é para hoje, senão vira uma tarefa igual às outras num dia que não é o
+	// dela. O título fica esmaecido ("ainda não está aqui") e ganha um sino com os dias que faltam.
+	const ehLembreteAntecipado = configuracoes.anteciparPendencias && fase === "antecedencia";
+	if (ehLembreteAntecipado) item.addClass("mytasks-item-lembrete");
+
+	// Lembrete não é arrastável: o cartão do dia 7 é um eco do prazo do dia 10, e soltá-lo no dia 8
+	// gravaria 8 como PRAZO — mudando calado a data real a partir de uma cópia. Arrastar segue valendo
+	// no cartão do dia do prazo, que é o único que representa a data de verdade.
+	if (arrastavel && !ehLembreteAntecipado) {
 		item.setAttribute("draggable", "true");
 		item.addEventListener("dragstart", (evento) => {
 			evento.dataTransfer?.setData(FORMATO_DRAG_TAREFA, tarefa.caminho);
@@ -129,6 +139,7 @@ export function desenharCartaoTarefa(
 	const info = item.createDiv({ cls: "mytasks-info" });
 	const linhaTitulo = info.createDiv({ cls: "mytasks-titulo-linha" });
 	const titulo = linhaTitulo.createEl("span", { text: tarefa.titulo, cls: "mytasks-titulo" });
+
 	// Destaque "bolinha": um pontinho colorido logo após o título, com a cor da propriedade escolhida.
 	if (corBolinha) {
 		const bolinha = linhaTitulo.createSpan({ cls: "mytasks-bolinha-destaque" });
@@ -158,12 +169,25 @@ export function desenharCartaoTarefa(
 					: rotuloValorPropriedade(app, valor as string | string[]);
 			meta.push(valorExibido);
 		}
+		// Quanto falta pro prazo entra como ÚLTIMA propriedade da meta — some depois das reais, e o
+		// separador " | " vem de graça do join. É a distância até o prazo (o que ela perde de vista);
+		// a data em si já saiu acima, no item de ID_DATA.
+		const faltamMeta = ehLembreteAntecipado ? diasAteOPrazo(tarefa, new Date()) : null;
+		if (faltamMeta !== null && faltamMeta > 0) {
+			meta.push(faltamMeta === 1 ? "amanhã" : `em ${faltamMeta} dias`);
+		}
 		info.createEl("span", { text: meta.join(" | "), cls: "mytasks-meta" });
 	} else if (tarefa.horario) {
 		info.createEl("span", { text: tarefa.horario, cls: "mytasks-meta" });
 	}
 
-	if (configuracoes.recorrenciaAtiva && tarefa.recorrencia !== "nenhuma") {
+	// Canto do cartão: UM ícone só. Nos dias de antecedência o sino toma o lugar do de recorrência
+	// (a informação que importa ali é "isto é um lembrete"); no dia do prazo o sino sai e a recorrência
+	// volta. Mesma classe nos dois, então tamanho e cor são idênticos por construção.
+	if (ehLembreteAntecipado) {
+		const iconeSino = item.createSpan({ cls: "mytasks-icone-recorrencia" });
+		setIcon(iconeSino, "bell");
+	} else if (configuracoes.recorrenciaAtiva && tarefa.recorrencia !== "nenhuma") {
 		const iconeRecorrencia = item.createSpan({ cls: "mytasks-icone-recorrencia" });
 		setIcon(iconeRecorrencia, "refresh-cw");
 	}

@@ -12,6 +12,7 @@ import {
 	PropriedadeValor,
 	Tarefa,
 	grupoFiltroVazio,
+	inicioDaJanelaDeTarefa,
 	periodosDaCondicao,
 } from "./tipos";
 import { ID_DATA } from "./render-tarefa";
@@ -103,7 +104,11 @@ function casaIgual(valor: PropriedadeValor, valores: string[]): boolean {
 	return valores.includes(valor);
 }
 
-function compilarCondicao(condicao: CondicaoFiltro, notaAtual: TFile | null): (tarefa: Tarefa) => boolean {
+function compilarCondicao(
+	condicao: CondicaoFiltro,
+	notaAtual: TFile | null,
+	anteciparAtivo: boolean
+): (tarefa: Tarefa) => boolean {
 	if (condicao.operador === "arquivo-atual") {
 		if (!notaAtual) return () => false;
 		return (tarefa: Tarefa) => tarefa.propriedades[condicao.propriedadeId] === notaAtual.path;
@@ -114,20 +119,28 @@ function compilarCondicao(condicao: CondicaoFiltro, notaAtual: TFile | null): (t
 		if (periodos.length === 0) return () => false;
 		const combinacao = condicao.combinacaoPeriodos ?? "ou";
 		return (tarefa: Tarefa) => {
-			const valor =
-				condicao.propriedadeId === ID_DATA
-					? tarefa.data
-					: (tarefa.propriedades[condicao.propriedadeId] as string | null);
+			const ehPrazo = condicao.propriedadeId === ID_DATA;
+			const valor = ehPrazo ? tarefa.data : (tarefa.propriedades[condicao.propriedadeId] as string | null);
+
+			// Com a antecipação ligada, um filtro de prazo compara contra a JANELA [início, prazo] em vez do
+			// dia do prazo sozinho — é o que faz "prazo até hoje" já trazer, no dia 7, a tarefa que vence no
+			// dia 10 com 3 dias de antecedência. Só vale pro campo de prazo: propriedades de data customizadas
+			// não têm antecedência e seguem comparando o valor cru.
+			const valorInicio = ehPrazo ? inicioDaJanelaDeTarefa(tarefa, anteciparAtivo) : valor;
 
 			const casaPeriodo = (periodo: PeriodoFiltro) => {
 				// "sem prazo" é o único período que casa JUSTAMENTE quando não há valor — tratado antes de
 				// tudo, tanto pra dizer "sim, sem prazo" quanto pra que os demais períodos digam "não" aqui.
 				if (periodo.ancora === "sem-prazo") return !valor;
-				if (!valor) return false;
+				if (!valor || !valorInicio) return false;
 				const { limite, inicio, fim } = resolverPeriodo(periodo, new Date());
-				if (periodo.operador === "antes") return limite !== undefined && valor < limite;
+				// "antes de X" olha o INÍCIO da janela (a tarefa já começou a pedir atenção antes de X?);
+				// "depois de X" olha o PRAZO (ela ainda está em jogo depois de X?). Sem antecipação os dois
+				// são o mesmo valor e o comportamento é idêntico ao de sempre.
+				if (periodo.operador === "antes") return limite !== undefined && valorInicio < limite;
 				if (periodo.operador === "depois") return limite !== undefined && valor > limite;
-				return inicio !== undefined && fim !== undefined && valor >= inicio && valor <= fim;
+				// Janela da tarefa cruza a janela do filtro (sobreposição), não "ponto dentro da janela".
+				return inicio !== undefined && fim !== undefined && valorInicio <= fim && valor >= inicio;
 			};
 
 			return combinacao === "e" ? periodos.every(casaPeriodo) : periodos.some(casaPeriodo);
@@ -166,11 +179,17 @@ function compilarCondicao(condicao: CondicaoFiltro, notaAtual: TFile | null): (t
 // Grupo com 0 itens é sempre inerte (não filtra nada), em QUALQUER nível — não só na raiz. Sem essa regra,
 // um subgrupo "ou" vazio (ela acabou de clicar "+ Adicionar grupo de filtros") combinado com "e" no pai
 // faria o pai inteiro virar falso na hora, por causa de .some() num array vazio.
-function compilarGrupo(grupo: GrupoFiltro, notaAtual: TFile | null): (tarefa: Tarefa) => boolean {
+function compilarGrupo(
+	grupo: GrupoFiltro,
+	notaAtual: TFile | null,
+	anteciparAtivo: boolean
+): (tarefa: Tarefa) => boolean {
 	if (grupo.itens.length === 0) return () => true;
 
 	const testes = grupo.itens.map((item: ItemFiltro) =>
-		item.tipo === "grupo" ? compilarGrupo(item, notaAtual) : compilarCondicao(item, notaAtual)
+		item.tipo === "grupo"
+			? compilarGrupo(item, notaAtual, anteciparAtivo)
+			: compilarCondicao(item, notaAtual, anteciparAtivo)
 	);
 
 	if (grupo.combinador === "e") return (tarefa: Tarefa) => testes.every((teste) => teste(tarefa));
@@ -182,10 +201,10 @@ export function compilarFiltro(
 	raiz: GrupoFiltro,
 	app: App,
 	sourcePath: string | null,
-	_configuracoes: ConfigEfetivaGrupo
+	configuracoes: ConfigEfetivaGrupo
 ): (tarefa: Tarefa) => boolean {
 	const notaAtual = sourcePath ? app.vault.getAbstractFileByPath(sourcePath) : null;
-	return compilarGrupo(raiz, notaAtual instanceof TFile ? notaAtual : null);
+	return compilarGrupo(raiz, notaAtual instanceof TFile ? notaAtual : null, configuracoes.anteciparPendencias);
 }
 
 // ---------- Gramática YAML de filtro (bloco `filtro:` do embed, e o modo texto "</>" do construtor) ----------

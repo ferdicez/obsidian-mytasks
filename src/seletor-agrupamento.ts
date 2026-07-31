@@ -1,5 +1,17 @@
-import { Menu, setIcon } from "obsidian";
+import { Menu, getIconIds, setIcon } from "obsidian";
 import { ConfigEfetivaGrupo, ID_STATUS, TipoAgrupamento } from "./tipos";
+
+// Desenha o primeiro ícone que EXISTE nesta versão do Obsidian. A biblioteca Lucide embutida varia
+// com a versão do app: um nome adicionado ao Lucide recentemente (ex: "grid-2x2-plus") simplesmente
+// não é registrado em builds mais antigas, e `setIcon` falha em SILÊNCIO — o botão fica vazio, sem
+// erro no console. Testar antes e cair pra uma alternativa antiga evita o botão invisível.
+function desenharIconeComAlternativas(elemento: HTMLElement, nomes: string[]): void {
+	const registrados = new Set(getIconIds());
+	// getIconIds() devolve os ids já registrados, que incluem o prefixo "lucide-" nas versões em que
+	// os ícones do Lucide são registrados com ele — por isso os dois testes.
+	const escolhido = nomes.find((n) => registrados.has(n) || registrados.has(`lucide-${n}`));
+	setIcon(elemento, escolhido ?? nomes[nomes.length - 1]);
+}
 
 export interface OpcoesSeletorAgrupamento {
 	configuracoes: ConfigEfetivaGrupo;
@@ -13,6 +25,19 @@ export interface OpcoesSeletorAgrupamento {
 	// "abas" desenha as opções lado a lado num bloco único (igual às visualizações do Calendário),
 	// em vez do botão com menu suspenso. Só vale quando a lista de opções é curta.
 	apresentacao?: "menu" | "abas";
+	// Ícone do botão na apresentação "menu". Ausente = "layout-grid" (agrupamento principal). Aceita
+	// uma LISTA em ordem de preferência: o primeiro que existir na versão do Obsidian é usado (ver
+	// desenharIconeComAlternativas). O subagrupamento do Kanban pede "grid-2x2-plus" e cai em
+	// alternativas mais antigas quando ele não existe.
+	icone?: string | string[];
+	// Rótulo de acessibilidade e título do menu. Ausente = "Agrupamento".
+	rotulo?: string;
+	// Esconde da lista o agrupamento já usado pelas colunas — subdividir uma coluna pela MESMA
+	// propriedade que a define renderia uma seção só, então a opção nem deve ser oferecida.
+	// É uma FUNÇÃO, não um valor: o agrupamento das colunas muda pelas abas sem o cabeçalho ser
+	// redesenhado (o Kanban chama renderizarGrade pra não piscar), então um valor capturado na
+	// construção envelheceria e o menu passaria a esconder a opção errada.
+	excluir?: () => TipoAgrupamento | undefined;
 }
 
 export function rotuloAgrupamento(agrupamento: TipoAgrupamento, configuracoes: ConfigEfetivaGrupo): string {
@@ -56,10 +81,11 @@ export class SeletorAgrupamento {
 
 		this.botao = container.createEl("button", {
 			cls: "mytasks-seletor-discreto mytasks-seletor-so-icone",
-			attr: { "aria-label": "Agrupamento" },
+			attr: { "aria-label": opcoes.rotulo ?? "Agrupamento" },
 		});
 		const icone = this.botao.createSpan({ cls: "mytasks-seletor-discreto-icone" });
-		setIcon(icone, "layout-grid");
+		const nomes = opcoes.icone ? (Array.isArray(opcoes.icone) ? opcoes.icone : [opcoes.icone]) : ["layout-grid"];
+		desenharIconeComAlternativas(icone, nomes);
 		const chevron = this.botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
 		setIcon(chevron, "chevrons-up-down");
 
@@ -98,13 +124,15 @@ export class SeletorAgrupamento {
 	}
 
 	private opcoesValidas(): TipoAgrupamento[] {
-		return opcoesDeAgrupamento(this.opcoes.configuracoes, this.opcoes.permitirNenhum, this.opcoes.permitirDia);
+		const lista = opcoesDeAgrupamento(this.opcoes.configuracoes, this.opcoes.permitirNenhum, this.opcoes.permitirDia);
+		const excluir = this.opcoes.excluir?.();
+		return excluir ? lista.filter((a) => a !== excluir) : lista;
 	}
 
 	private abrirMenu(): void {
 		const menu = new Menu();
 		menu.setUseNativeMenu(false);
-		menu.addItem((item) => item.setTitle("selecionar agrupamento").setDisabled(true));
+		menu.addItem((item) => item.setTitle(this.opcoes.rotulo ?? "selecionar agrupamento").setDisabled(true));
 		menu.addSeparator();
 		for (const agrupamento of this.opcoesValidas()) {
 			menu.addItem((item) =>
