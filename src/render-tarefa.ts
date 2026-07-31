@@ -97,24 +97,23 @@ export function desenharCartaoTarefa(
 		});
 		item.addEventListener("dragend", () => item.removeClass("mytasks-item-arrastando"));
 	}
-	if (fase === "prazo") {
-		// Dia do prazo: destaque cheio (fundo + borda lateral).
-		item.addClass("mytasks-item-aviso");
-		item.addClass("mytasks-item-borda-reta");
-		item.style.backgroundColor = corComOpacidade(configuracoes.corAviso, 0.18);
-		item.style.borderLeft = `3px solid ${configuracoes.corAviso}`;
-	} else if (fase === "antecedencia") {
-		// Dias de antecedência (antes do prazo): só um tingido bem leve, sem borda —
-		// parece uma tarefa normal, mas já sinaliza que o prazo está chegando.
+	// "borda" é uma bolinha colorida no fim do título (desenhada mais abaixo, junto ao título).
+	const corBolinha = corDeDestaquePorEstilo(tarefa, configuracoes, "borda");
+	const corCheckbox = corDeDestaquePorEstilo(tarefa, configuracoes, "checkbox");
+	const corFundo = corDeDestaquePorEstilo(tarefa, configuracoes, "linha");
+
+	// Fundo do cartão. Só os dias de ANTECEDÊNCIA usam a corAviso — no dia do prazo o cartão fica igual a
+	// qualquer outro, porque ali a tarefa já é trabalho de hoje; quem avisa é o lembrete dos dias antes.
+	// Com o dia do prazo liberado, o fundo volta a ser território do destaque de propriedade ("linha"),
+	// que só cede a vez enquanto o lembrete está pintando.
+	if (fase === "antecedencia") {
 		item.addClass("mytasks-item-aviso");
 		item.addClass("mytasks-item-antecedencia");
 		item.style.backgroundColor = corComOpacidade(configuracoes.corAviso, 0.07);
+	} else if (corFundo) {
+		item.addClass("mytasks-item-fundo-destaque");
+		item.style.backgroundColor = corComOpacidade(corFundo, 0.18);
 	}
-
-	// "borda" agora é uma bolinha colorida no fim do título (desenhada mais abaixo, junto ao título) —
-	// não colore mais a lateral, pra não colidir com o aviso de prazo.
-	const corBolinha = corDeDestaquePorEstilo(tarefa, configuracoes, "borda");
-	const corCheckbox = corDeDestaquePorEstilo(tarefa, configuracoes, "checkbox");
 
 	if (mostrarCheckbox) {
 		const checkbox = item.createEl("input", { type: "checkbox" });

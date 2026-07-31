@@ -394,10 +394,8 @@ export default class MyTasksPlugin extends Plugin {
 			};
 		}
 
-		// Estilo de destaque "linha inteira" foi removido — descarta qualquer entrada salva desse estilo.
-		if (grupo.destaques && "linha" in grupo.destaques) {
-			delete (grupo.destaques as Record<string, unknown>).linha;
-		}
+		// (O estilo "linha" já foi removido e voltou como "Fundo colorido" — a migração que apagava
+		// entradas salvas desse estilo saiu junto, senão ela zeraria a configuração nova a cada carga.)
 
 		// `condicoes: CondicaoFiltro[]` (lista plana antiga) -> `raiz: GrupoFiltro` (árvore E/OU/NENHUM).
 		// Envelopa como um único grupo "e" com as condições antigas como folhas — mesmo comportamento de

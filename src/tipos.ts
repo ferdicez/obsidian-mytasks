@@ -20,14 +20,16 @@ export interface OpcaoSelecao {
 	cor?: string;
 }
 
-// "linha" (linha inteira colorida) foi removida (esse espaço é do aviso de prazo). O estilo "borda"
-// mantém a chave por compatibilidade, mas agora é renderizado como uma BOLINHA colorida no fim do título
-// (a borda lateral foi trocada por ela). Sobram: checkbox colorido e bolinha colorida.
-export type EstiloDestaque = "checkbox" | "borda";
+// "linha" (fundo do cartão inteiro colorido) voltou: o aviso de prazo deixou de pintar o fundo no dia do
+// vencimento — agora a corAviso só tinge levemente os dias de ANTECEDÊNCIA (o lembrete), então o fundo do
+// cartão está livre de novo pra ser destaque de propriedade. O estilo "borda" mantém a chave por
+// compatibilidade, mas é renderizado como uma BOLINHA colorida no fim do título.
+export type EstiloDestaque = "checkbox" | "borda" | "linha";
 
 export const ROTULOS_ESTILO_DESTAQUE: Record<EstiloDestaque, string> = {
 	checkbox: "Checkbox colorido",
 	borda: "Bolinha colorida (no fim do título)",
+	linha: "Fundo colorido (cartão inteiro)",
 };
 
 export type EspessuraCheckbox = "fina" | "media" | "grossa";
@@ -705,8 +707,10 @@ export function campoVisivelNaNota(config: ConfigEfetivaGrupo, campoId: string):
 	return lista.includes(campoId);
 }
 
-// "antecedencia" = já entrou no período de aviso, mas o prazo ainda não chegou (visual mais claro).
-// "prazo" = hoje é o dia do prazo (visual cheio). null = fora do período de aviso.
+// "antecedencia" = já entrou no período de aviso, mas o prazo ainda não chegou: é o LEMBRETE, e é a única
+// fase que ganha cor (o tingido leve da corAviso). "prazo" = hoje é o dia do prazo: o cartão fica igual a
+// qualquer outro, porque no dia do vencimento a tarefa é trabalho de hoje como os demais — quem avisa é o
+// lembrete dos dias anteriores, não uma cor no dia. null = fora do período de aviso.
 export type FaseAviso = "antecedencia" | "prazo";
 
 export function faseDeAviso(tarefa: Tarefa, hoje: Date): FaseAviso | null {

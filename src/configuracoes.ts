@@ -488,8 +488,10 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
-			.setName("Cor do aviso de prazo")
-			.setDesc("Cor de fundo/borda usada quando a tarefa entra no período de 'avisar com antecedência'.")
+			.setName("Cor do lembrete")
+			.setDesc(
+				"Cor do fundo clarinho da tarefa nos dias em que ela aparece como lembrete, antes do prazo ('avisar com antecedência'). No dia do prazo o cartão fica normal, como qualquer outra tarefa."
+			)
 			.addColorPicker((picker) =>
 				picker.setValue(this.grupo.corAviso).onChange(async (valor) => {
 					this.grupo.corAviso = valor;

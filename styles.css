@@ -187,11 +187,6 @@
 	cursor: grab;
 }
 
-.mytasks-item-borda-reta {
-	border-top-left-radius: 0;
-	border-bottom-left-radius: 0;
-}
-
 .mytasks-item-arrastando {
 	opacity: 0.4;
 }
@@ -205,10 +200,18 @@
 	border-radius: 6px;
 }
 
-/* Dias de antecedência (antes do prazo): sem borda lateral, então os 4 cantos ficam
-   arredondados. O fundo bem claro é aplicado inline em render-tarefa.ts. */
+/* Dias de antecedência (antes do prazo): é o LEMBRETE, a única fase que ganha cor de aviso.
+   No dia do prazo o cartão fica igual a qualquer outro (ver render-tarefa.ts). Sem borda
+   lateral, os 4 cantos ficam arredondados; o fundo bem claro é aplicado inline. */
 .mytasks-item-antecedencia {
 	border-left: none;
+}
+
+/* Destaque "linha": o cartão inteiro pintado com a cor da opção da propriedade. A cor em si é
+   aplicada inline em render-tarefa.ts; aqui só o formato. Cede a vez pro lembrete enquanto ele
+   estiver pintando — os dois disputam o mesmo fundo. */
+.mytasks-item-fundo-destaque {
+	border-radius: 6px;
 }
 
 /* Lembrete antecipado: a tarefa está aparecendo num dia que NÃO é o do prazo (só quando
@@ -1226,7 +1229,12 @@
 
 .mytasks-kanban-grade {
 	display: flex;
-	align-items: stretch;
+	/* `stretch` estica os filhos até a altura VISÍVEL do contêiner, não até a altura rolada. Com o
+	   conteúdo transbordando, a coluna parava na dobra e o border-right dela junto — descendo a barra,
+	   as divisórias sumiam do ponto em que a coluna acabava pra baixo. `flex-start` + `min-height:
+	   max-content` na coluna (abaixo) faz cada coluna ter a altura da mais alta, inclusive a parte
+	   que só aparece rolando. */
+	align-items: flex-start;
 	gap: 0;
 	flex: 1;
 	min-height: 0;
@@ -1247,9 +1255,13 @@
 .mytasks-kanban-coluna {
 	display: flex;
 	flex-direction: column;
-	align-self: stretch;
 	min-width: 220px;
-	min-height: 200px;
+	/* `min-height: 100%` casa a altura VISÍVEL (coluna curta não fica um toco no topo) e
+	   `max-content` casa a altura ROLADA (a coluna acompanha a mais alta até o fim do scroll).
+	   As duas juntas mantêm o border-right desenhado na área toda — ver o comentário do -grade.
+	   O `align-self: stretch` que estava aqui não fazia nem uma coisa nem outra quando o conteúdo
+	   transbordava, e era isso que fazia a divisória sumir ao descer a barra. */
+	min-height: max(100%, max-content);
 	flex: 1 0 0;
 	padding: 8px;
 	background: var(--background-primary);

@@ -258,7 +258,9 @@ export class MotorKanban {
 				icone: ["rows-3", "rows", "layout-grid"],
 				rotulo: "subagrupamento",
 				excluir: () => this.agrupamento,
-				elementoAlinhamento: cabecalho,
+				// Sem `elementoAlinhamento`: o menu desce colado no próprio botão, igual ao do filtro
+				// ao lado. Alinhar pelo cabeçalho inteiro jogava o menu lá pra borda esquerda da view,
+				// longe do botão clicado — os dois seletores vizinhos abriam em lugares diferentes.
 				aoEscolher: (agrupamento) => {
 					this.subagrupamento = agrupamento;
 					this.renderizarGrade();
