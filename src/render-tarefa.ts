@@ -121,7 +121,7 @@ export function desenharCartaoTarefa(
 		item.style.backgroundColor = corComOpacidade(configuracoes.corAviso, 0.07);
 	} else if (corFundo) {
 		item.addClass("mytasks-item-fundo-destaque");
-		item.style.backgroundColor = corComOpacidade(corFundo, 0.18);
+		item.style.backgroundColor = corComOpacidade(corFundo, 0.28);
 	}
 
 	if (mostrarCheckbox) {
