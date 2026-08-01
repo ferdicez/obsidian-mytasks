@@ -1229,12 +1229,14 @@
 
 .mytasks-kanban-grade {
 	display: flex;
-	/* `stretch` estica os filhos até a altura VISÍVEL do contêiner, não até a altura rolada. Com o
-	   conteúdo transbordando, a coluna parava na dobra e o border-right dela junto — descendo a barra,
-	   as divisórias sumiam do ponto em que a coluna acabava pra baixo. `flex-start` + `min-height:
-	   max-content` na coluna (abaixo) faz cada coluna ter a altura da mais alta, inclusive a parte
-	   que só aparece rolando. */
-	align-items: flex-start;
+	/* `align-items: stretch` (o padrão) é o que faz a coluna curta ir até embaixo da área visível —
+	   as divisórias descem a tela inteira mesmo com o quadro quase vazio. A tentativa anterior trocou
+	   isto por `flex-start` pra resolver o caso oposto (conteúdo transbordando), e aí as divisórias
+	   passaram a parar na altura da última tarefa: sem stretch, a coluna encolhe pro tamanho do
+	   conteúdo. Os dois casos são resolvidos por stretch + `min-height: max-content` na coluna
+	   (abaixo) — stretch define a altura usada, min-height só levanta o piso quando o conteúdo é
+	   mais alto que a dobra. */
+	align-items: stretch;
 	gap: 0;
 	flex: 1;
 	min-height: 0;
@@ -1256,12 +1258,12 @@
 	display: flex;
 	flex-direction: column;
 	min-width: 220px;
-	/* `min-height: 100%` casa a altura VISÍVEL (coluna curta não fica um toco no topo) e
-	   `max-content` casa a altura ROLADA (a coluna acompanha a mais alta até o fim do scroll).
-	   As duas juntas mantêm o border-right desenhado na área toda — ver o comentário do -grade.
-	   O `align-self: stretch` que estava aqui não fazia nem uma coisa nem outra quando o conteúdo
-	   transbordava, e era isso que fazia a divisória sumir ao descer a barra. */
-	min-height: max(100%, max-content);
+	/* O stretch da grade já dá a altura VISÍVEL (coluna curta desce até embaixo da tela). Este
+	   `min-height: max-content` cobre o caso do conteúdo transbordar: aí a coluna passa da dobra e
+	   leva o border-right junto até o fim do scroll, em vez de parar onde a área visível acabava.
+	   Sem `100%` aqui de propósito — percentual de altura dentro de um flex que rola não resolve
+	   pra altura visível, e era isso que travava a divisória na altura da última tarefa. */
+	min-height: max-content;
 	flex: 1 0 0;
 	padding: 8px;
 	background: var(--background-primary);
@@ -1345,6 +1347,83 @@
 /* ===== Grupos de tarefas ===== */
 
 /* Linha divisória cinza entre seções das Configurações (e da tela de grupos). */
+/* Seletor de ícone (mesmo motor de busca do Lucide usado no Base Tabs). */
+.mytasks-icon-picker-preview {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2, 8px);
+	margin-bottom: var(--size-4-3, 12px);
+}
+
+.mytasks-icon-picker-preview-icon {
+	display: inline-flex;
+	width: var(--icon-l, 20px);
+	height: var(--icon-l, 20px);
+	color: var(--text-normal);
+}
+
+.mytasks-icon-picker-search {
+	flex: 1;
+}
+
+.mytasks-icon-picker-results {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+	gap: var(--size-4-1, 4px);
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.mytasks-icon-picker-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1 / 1;
+	border-radius: var(--radius-s, 4px);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.mytasks-icon-picker-cell:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* O ícone que já está escolhido fica marcado na grade, pra ela se localizar ao reabrir o seletor. */
+.mytasks-icon-picker-cell-ativa {
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+	box-shadow: inset 0 0 0 1px var(--text-accent);
+}
+
+/* Prévia do ícone: no modal do botão e na linha de cada botão em Configurações.
+   `.setting-item` é flex e o elemento é anexado por último (createDiv no settingEl), o que jogaria o
+   ícone pra ponta direita, depois dos controles. O `order: -1` traz ele pra frente do nome, que é
+   onde ele significa alguma coisa. */
+.mytasks-icone-previa {
+	display: inline-flex;
+	align-items: center;
+	color: var(--text-muted);
+	margin-right: var(--size-4-2, 8px);
+	order: -1;
+	flex: 0 0 auto;
+}
+
+/* Cada ação dentro do modal de editar botão: um bloco visualmente fechado, pra ficar claro que o
+   "Novo valor" pertence à ação de cima e não à seguinte quando o botão tem várias. */
+.mytasks-acao-botao-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 0 12px;
+	margin-bottom: 10px;
+	background: var(--background-secondary);
+}
+
+/* Sem a borda de baixo do último Setting, que duplicaria a borda do card. */
+.mytasks-acao-botao-card .setting-item:last-child {
+	border-bottom: none;
+}
+
 .mytasks-config-divisoria {
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);

@@ -1,14 +1,20 @@
 import { App, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type MyTasksPlugin from "./main";
 import {
+	ACOES_FIXAS_PADRAO,
+	BotaoAcao,
 	CAMPOS_TEMPLATE_NOTA_FIXOS,
 	ConfigEfetivaGrupo,
+	DESCRICOES_ACOES_FIXAS,
 	EspessuraCheckbox,
 	EstiloDestaque,
 	FiltroSalvo,
 	GRUPO_PADRAO,
 	GrupoTarefas,
+	ICONES_ACOES_FIXAS,
+	ID_DATA_ACAO,
 	ID_STATUS,
+	ORDEM_ACOES_FIXAS,
 	ModoCalendario,
 	OpcaoSelecao,
 	PropriedadeDefinida,
@@ -19,6 +25,7 @@ import {
 	Recorrencia,
 	TipoAgrupamento,
 	VisualizacaoSalva,
+	botoesAcaoPadrao,
 	campoEhOpcional,
 	campoPodeSerOpcional,
 	campoVisivelNaNota,
@@ -41,6 +48,7 @@ import { ID_DATA_ENTRADA } from "./render-tarefa";
 import { SugestorArquivos } from "./sugestor-arquivos";
 import { CampoMetaBind, botaoAdicionarCampo, codigoParaColar, listarCamposMetaBind } from "./meta-bind-tarefa";
 import { ModalEditarCalendarioExterno } from "./modal-editar-calendario-externo";
+import { ModalEditarBotaoAcao } from "./modal-editar-botao-acao";
 
 type PaginaConfig = "geral" | "calendario" | "kanban" | "tarefas" | "nota" | "filtros" | "avancado";
 
@@ -233,6 +241,10 @@ export class AbaConfiguracoes extends PluginSettingTab {
 							valorDiscriminador: dados.valorDiscriminador,
 							icone: dados.icone,
 						};
+						// GRUPO_PADRAO tem `botoesAcao: []` de propósito — os botões de exemplo dependem
+						// dos status do grupo, que só existem aqui. Sem esta linha, um grupo novo nasceria
+						// com o menu do clique direito vazio enquanto os antigos vêm semeados na migração.
+						novo.botoesAcao = botoesAcaoPadrao(novo.status);
 						this.plugin.configuracoes.grupos.push(novo);
 						await this.plugin.salvarConfiguracoes();
 						this.plugin.registrarRibbonsDeGrupos();
@@ -627,6 +639,9 @@ export class AbaConfiguracoes extends PluginSettingTab {
 					).open();
 				})
 		);
+
+		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
+		this.renderizarSecaoBotoesAcao(containerEl);
 
 		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
 		containerEl.createEl("h3", { text: "Visualizações salvas" });
@@ -1230,6 +1245,169 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				})
 			);
 		}
+	}
+
+	// ---------------------------------------------------------------------
+	// Botões de ação (menu do clique direito no cartão da tarefa)
+	// ---------------------------------------------------------------------
+
+	private renderizarSecaoBotoesAcao(containerEl: HTMLElement): void {
+		containerEl.createEl("h3", { text: "Menu do clique direito" });
+		containerEl.createEl("p", {
+			text: "Botões que aparecem ao clicar com o botão direito em cima de uma tarefa, no Kanban, no Calendário e na Lista. Cada botão pode alterar um ou vários campos de uma vez.",
+			cls: "setting-item-description",
+		});
+
+		const listaBotoes = containerEl.createDiv();
+		this.renderizarListaBotoesAcao(listaBotoes);
+
+		new Setting(containerEl).addButton((btn) =>
+			btn
+				.setButtonText("+ Novo botão")
+				.setCta()
+				.onClick(() => {
+					new ModalEditarBotaoAcao(this.app, null, this.configEfetiva, async (botao) => {
+						this.grupo.botoesAcao.push(botao);
+						await this.plugin.salvarConfiguracoes();
+						this.display();
+					}).open();
+				})
+		);
+
+		containerEl.createEl("h4", { text: "Ações prontas" });
+		containerEl.createEl("p", {
+			text: "Ações que já vêm com o plugin. Você não muda o que elas fazem, mas pode escondê-las ou trocar o nome que aparece no menu.",
+			cls: "setting-item-description",
+		});
+
+		for (const id of ORDEM_ACOES_FIXAS) {
+			const config = this.grupo.acoesFixas[id];
+			const setting = new Setting(containerEl);
+			setting.settingEl.createDiv({ cls: "mytasks-icone-previa" }, (el) => setIcon(el, ICONES_ACOES_FIXAS[id]));
+			setting
+				.setName(DESCRICOES_ACOES_FIXAS[id])
+				.addText((text) =>
+					text
+						.setPlaceholder(ACOES_FIXAS_PADRAO[id].nome)
+						.setValue(config.nome)
+						.onChange(async (valor) => {
+							// Nome em branco volta pro padrão em vez de virar um item invisível no menu.
+							config.nome = valor.trim() || ACOES_FIXAS_PADRAO[id].nome;
+							await this.plugin.salvarConfiguracoes();
+						})
+				)
+				.addToggle((toggle) =>
+					toggle.setValue(config.visivel).onChange(async (valor) => {
+						config.visivel = valor;
+						await this.plugin.salvarConfiguracoes();
+					})
+				);
+		}
+	}
+
+	private renderizarListaBotoesAcao(container: HTMLElement): void {
+		container.empty();
+
+		if (this.grupo.botoesAcao.length === 0) {
+			container.createEl("p", {
+				text: "Nenhum botão criado. Sem botões (e sem as ações prontas abaixo), o clique direito não abre menu nenhum.",
+				cls: "setting-item-description",
+			});
+			return;
+		}
+
+		this.grupo.botoesAcao.forEach((botao, indice) => {
+			const setting = new Setting(container).setName(botao.nome).setDesc(this.resumoDoBotao(botao));
+
+			// Mesmo ícone que vai aparecer no menu, na frente do nome — dá pra conferir a lista inteira
+			// sem abrir o editor de cada botão.
+			if (botao.icone) {
+				setting.settingEl.createDiv({ cls: "mytasks-icone-previa" }, (el) => setIcon(el, botao.icone as string));
+			}
+
+			setting.addExtraButton((btn) =>
+				btn
+					.setIcon("arrow-up")
+					.setTooltip("Subir")
+					.setDisabled(indice === 0)
+					.onClick(() => this.moverBotaoAcao(indice, -1))
+			);
+			setting.addExtraButton((btn) =>
+				btn
+					.setIcon("arrow-down")
+					.setTooltip("Descer")
+					.setDisabled(indice === this.grupo.botoesAcao.length - 1)
+					.onClick(() => this.moverBotaoAcao(indice, 1))
+			);
+			setting.addExtraButton((btn) =>
+				btn
+					.setIcon("pencil")
+					.setTooltip("Editar")
+					.onClick(() => {
+						new ModalEditarBotaoAcao(this.app, botao, this.configEfetiva, async (atualizado) => {
+							const i = this.grupo.botoesAcao.findIndex((b) => b.id === botao.id);
+							if (i >= 0) this.grupo.botoesAcao[i] = atualizado;
+							await this.plugin.salvarConfiguracoes();
+							this.display();
+						}).open();
+					})
+			);
+			setting.addExtraButton((btn) =>
+				btn
+					.setIcon("trash")
+					.setTooltip("Excluir")
+					.onClick(async () => {
+						if (!confirm(`Excluir o botão "${botao.nome}"?`)) return;
+						this.grupo.botoesAcao = this.grupo.botoesAcao.filter((b) => b.id !== botao.id);
+						await this.plugin.salvarConfiguracoes();
+						this.display();
+					})
+			);
+			// O toggle vem por último pra ficar na ponta direita da linha, separado dos ícones.
+			setting.addToggle((toggle) =>
+				toggle
+					.setTooltip("Mostrar no menu")
+					.setValue(botao.visivel)
+					.onChange(async (valor) => {
+						botao.visivel = valor;
+						await this.plugin.salvarConfiguracoes();
+					})
+			);
+		});
+	}
+
+	// Descreve em texto o que o botão faz, pra ela conferir na lista sem abrir o modal de cada um.
+	private resumoDoBotao(botao: BotaoAcao): string {
+		const config = this.configEfetiva;
+		const partes = botao.acoes.map((acao) => {
+			const rotulo =
+				acao.campo === ID_STATUS
+					? config.status.rotulo || "Status"
+					: acao.campo === ID_DATA_ACAO
+						? config.dataTarefa.rotulo || "Prazo"
+						: config.propriedades.find((p) => p.id === acao.campo)?.rotulo ?? acao.campo;
+
+			if (acao.modo === "limpar") return `${rotulo}: limpar`;
+			if (acao.modo === "hoje") return `${rotulo}: hoje`;
+			if (acao.modo === "dias") {
+				const dias = acao.dias ?? 0;
+				if (dias === 1) return `${rotulo}: amanhã`;
+				if (dias === 0) return `${rotulo}: hoje`;
+				if (dias < 0) return `${rotulo}: ${Math.abs(dias)} dia(s) atrás`;
+				return `${rotulo}: daqui a ${dias} dia(s)`;
+			}
+			return `${rotulo}: ${acao.valor || "(vazio)"}`;
+		});
+		return partes.length > 0 ? partes.join(" · ") : "Sem ações — não faz nada";
+	}
+
+	private async moverBotaoAcao(indice: number, direcao: -1 | 1): Promise<void> {
+		const destino = indice + direcao;
+		if (destino < 0 || destino >= this.grupo.botoesAcao.length) return;
+		const lista = this.grupo.botoesAcao;
+		[lista[indice], lista[destino]] = [lista[destino], lista[indice]];
+		await this.plugin.salvarConfiguracoes();
+		this.display();
 	}
 
 	private renderizarListaPropriedades(container: HTMLElement) {

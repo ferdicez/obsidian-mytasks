@@ -1,8 +1,13 @@
 import { Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import {
+	ACOES_FIXAS_PADRAO,
 	CONFIGURACOES_PADRAO,
+	ConfigAcaoFixa,
 	ConfiguracoesGestorTarefas,
 	GRUPO_PADRAO,
+	IdAcaoFixa,
+	ORDEM_ACOES_FIXAS,
+	botoesAcaoPadrao,
 	GrupoTarefas,
 	INTERVALO_ATUALIZACAO_PADRAO_MIN,
 	arquivoEhTarefaRelevante,
@@ -355,6 +360,35 @@ export default class MyTasksPlugin extends Plugin {
 		// com a constante do módulo — todos os grupos apontariam para a mesma lista.
 		if (!Array.isArray(grupo.calendariosExternos)) grupo.calendariosExternos = [];
 		if (typeof grupo.mostrarEventosExternos !== "boolean") grupo.mostrarEventosExternos = true;
+
+		// Menu do clique direito. `dadosDoGrupo.botoesAcao === undefined` distingue "grupo salvo antes
+		// dos botões existirem" (semeia os de exemplo) de "grupo que já os teve e a usuária apagou
+		// todos" (respeita a lista vazia) — semear pelo `length === 0` faria os exemplos voltarem
+		// sozinhos a cada carga do plugin depois de ela apagá-los.
+		if (dadosDoGrupo.botoesAcao === undefined) {
+			grupo.botoesAcao = botoesAcaoPadrao(grupo.status);
+		} else if (!Array.isArray(grupo.botoesAcao)) {
+			grupo.botoesAcao = [];
+		}
+		// Merge por ação (não `||`): se uma ação fixa nova for adicionada no futuro, ela aparece nos
+		// grupos antigos sem apagar o nome/visibilidade que ela já personalizou nas outras.
+		//
+		// O clone profundo é obrigatório. Um spread raso (`{...ACOES_FIXAS_PADRAO}`) copia as
+		// REFERÊNCIAS dos objetos {visivel, nome} de dentro — todos os grupos ficariam apontando pros
+		// mesmos três objetos da constante do módulo, e a tela de Configurações os edita no lugar
+		// (`config.nome = ...`). Renomear "Excluir" num grupo renomearia em TODOS, e sujaria a própria
+		// ACOES_FIXAS_PADRAO, que passaria a ser o "padrão" pra todo grupo criado depois.
+		const acoesFixasMescladas = { ...ACOES_FIXAS_PADRAO, ...(grupo.acoesFixas ?? {}) } as Record<
+			IdAcaoFixa,
+			ConfigAcaoFixa
+		>;
+		grupo.acoesFixas = ORDEM_ACOES_FIXAS.reduce(
+			(acc, id) => {
+				acc[id] = { ...acoesFixasMescladas[id] };
+				return acc;
+			},
+			{} as Record<IdAcaoFixa, ConfigAcaoFixa>
+		);
 
 		// Chave técnica da data ausente: deriva da normalização do rótulo salvo.
 		if (!grupo.dataTarefa.chave) {

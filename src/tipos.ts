@@ -58,6 +58,11 @@ export type ConfigDestaques = Partial<Record<EstiloDestaque, ConfigDestaque>>;
 
 export const ID_STATUS = "status";
 
+// ID interno do campo "prazo" (o mesmo valor exportado como ID_DATA por render-tarefa.ts, reexportado
+// de lá pra não quebrar os imports existentes). Mora aqui porque tipos.ts não pode importar de
+// render-tarefa.ts — seria circular, já que render-tarefa importa daqui.
+export const ID_DATA_ACAO = "data";
+
 export type OperadorFiltro =
 	| "igual" // valor está entre os selecionados (comportamento de sempre)
 	| "diferente" // valor NÃO está entre os selecionados
@@ -190,6 +195,131 @@ export interface PropriedadeDefinida {
 	// Só para tipo "link_arquivo": lista fixa de caminhos disponíveis para escolher (dropdown rápido,
 	// sem precisar buscar). Vazia/ausente = busca livre em todo o vault (comportamento de sempre).
 	arquivosFixos?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Botões de ação (menu do clique direito no cartão da tarefa)
+// ---------------------------------------------------------------------------
+
+// Uma AÇÃO é "grave este valor neste campo". Um botão executa uma lista delas em sequência, então um
+// mesmo clique pode mover a tarefa de status E marcar o prazo pra hoje (o exemplo que a Fernanda deu).
+//
+// `campo` é o ID do alvo: ID_STATUS pro status, ID_DATA pro prazo, ou o `id` de uma propriedade
+// customizada. Guardar o ID (e não a chave do frontmatter) é de propósito — a chave é renomeável em
+// Configurações → Avançado, e o botão continua apontando pro campo certo depois da renomeação.
+export interface AcaoBotao {
+	campo: string;
+	// Como o valor é calculado na hora do clique. Só o prazo (ID_DATA) usa os modos relativos; os
+	// demais campos usam sempre "fixo", com o valor digitado/escolhido na configuração do botão.
+	//   fixo         → grava `valor` como está
+	//   hoje         → grava a data de hoje
+	//   dias         → grava hoje + `dias` (1 = amanhã; aceita negativo pra trás)
+	//   limpar       → apaga a chave (tarefa fica sem prazo / propriedade sem valor)
+	modo: "fixo" | "hoje" | "dias" | "limpar";
+	valor?: string;
+	dias?: number;
+}
+
+export interface BotaoAcao {
+	id: string;
+	nome: string;
+	visivel: boolean;
+	icone?: string;
+	acoes: AcaoBotao[];
+}
+
+// Ações embutidas do menu (não são configuráveis em O QUE fazem — só se aparecem e com que nome).
+// Ficam depois de uma linha divisória, no fim do menu.
+export type IdAcaoFixa = "abrir" | "renomear" | "excluir";
+
+export interface ConfigAcaoFixa {
+	visivel: boolean;
+	nome: string;
+}
+
+export const ACOES_FIXAS_PADRAO: Record<IdAcaoFixa, ConfigAcaoFixa> = {
+	abrir: { visivel: true, nome: "Abrir tarefa" },
+	renomear: { visivel: true, nome: "Renomear" },
+	excluir: { visivel: true, nome: "Excluir tarefa" },
+};
+
+// Ordem de exibição das fixas no menu (o Record acima não garante ordem por si só).
+export const ORDEM_ACOES_FIXAS: IdAcaoFixa[] = ["abrir", "renomear", "excluir"];
+
+// O que cada ação fixa FAZ — mostrado em Configurações ao lado do campo de nome, já que o nome é
+// editável e sozinho deixaria de dizer qual ação é qual depois que ela renomeasse.
+export const DESCRICOES_ACOES_FIXAS: Record<IdAcaoFixa, string> = {
+	abrir: "Abre a nota da tarefa",
+	renomear: "Muda o título (e o nome do arquivo) da tarefa",
+	excluir: "Apaga a nota da tarefa (pede confirmação)",
+};
+
+export const ICONES_ACOES_FIXAS: Record<IdAcaoFixa, string> = {
+	abrir: "file-text",
+	renomear: "pencil",
+	excluir: "trash",
+};
+
+// Botões que já nascem prontos, pra ela ter de onde partir em vez de uma lista vazia (escolha dela).
+// São gerados a partir dos STATUS REAIS do grupo, não de valores fixos: o grupo dela usa
+// "inbox/fazer/iniciado/concluído", outra instalação usa outros nomes, e um botão que grave um status
+// inexistente sujaria o frontmatter com um valor que nenhuma coluna do Kanban reconhece.
+//
+// Só é chamada na criação de um grupo (e na migração de grupos antigos) — depois disso a lista é dela,
+// e editar/apagar aqui não mexe no que já está salvo.
+export function botoesAcaoPadrao(status: ConfigStatus): BotaoAcao[] {
+	const primeiro = primeiraOpcaoStatus(status);
+	const comData = opcaoStatusComData(status);
+	const botoes: BotaoAcao[] = [];
+
+	if (comData) {
+		botoes.push({
+			id: "botao_padrao_fazer_hoje",
+			nome: "Fazer hoje",
+			visivel: true,
+			icone: "sun",
+			acoes: [
+				{ campo: ID_STATUS, modo: "fixo", valor: comData },
+				{ campo: ID_DATA_ACAO, modo: "hoje" },
+			],
+		});
+	}
+
+	botoes.push(
+		{
+			id: "botao_padrao_amanha",
+			nome: "Adiar para amanhã",
+			visivel: true,
+			icone: "arrow-right",
+			acoes: [{ campo: ID_DATA_ACAO, modo: "dias", dias: 1 }],
+		},
+		{
+			id: "botao_padrao_semana",
+			nome: "Adiar 7 dias",
+			visivel: true,
+			icone: "calendar-clock",
+			acoes: [{ campo: ID_DATA_ACAO, modo: "dias", dias: 7 }],
+		},
+		{
+			id: "botao_padrao_sem_prazo",
+			nome: "Tirar o prazo",
+			visivel: true,
+			icone: "calendar-x",
+			acoes: [{ campo: ID_DATA_ACAO, modo: "limpar" }],
+		}
+	);
+
+	if (primeiro) {
+		botoes.push({
+			id: "botao_padrao_inbox",
+			nome: `Mandar para ${primeiro}`,
+			visivel: true,
+			icone: "inbox",
+			acoes: [{ campo: ID_STATUS, modo: "fixo", valor: primeiro }],
+		});
+	}
+
+	return botoes;
 }
 
 export interface ConfigStatus {
@@ -347,6 +477,10 @@ export interface ConfigEfetivaGrupo {
 	// Chaves técnicas dos campos fixos (fora status/prazo, que têm seu próprio par rotulo/chave) — ver
 	// ChavesFixas. Renomeável em Configurações → Avançado, com migração automática no vault.
 	chavesFixas: ChavesFixas;
+	// Menu do clique direito no cartão: os botões que a usuária monta (ver BotaoAcao) e as três ações
+	// embutidas, que ela só liga/desliga e renomeia.
+	botoesAcao: BotaoAcao[];
+	acoesFixas: Record<IdAcaoFixa, ConfigAcaoFixa>;
 	// Campos derivados só-leitura, preenchidos por configDoGrupo, para o repositório carimbar o discriminador
 	// ao criar tarefas e resolver o pertencimento — não são persistidos (vêm do grupo + do topo global).
 	readonly __propriedadeGrupo?: string | null;
@@ -468,6 +602,12 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	filtroPadraoListaId: null,
 	templateNota: { ...TEMPLATE_NOTA_PADRAO },
 	chavesFixas: { ...CHAVES_FIXAS_PADRAO },
+	// Vazio na constante: os botões de exemplo são gerados a partir dos status REAIS do grupo, o que
+	// só dá pra fazer quando o grupo existe (ver botoesAcaoPadrao, chamada em migrarCamposDeGrupo e
+	// na criação de grupo). Uma lista literal aqui gravaria "Fazer"/"Inbox" em vaults que usam outros
+	// nomes de status.
+	botoesAcao: [],
+	acoesFixas: { ...ACOES_FIXAS_PADRAO },
 };
 
 export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {

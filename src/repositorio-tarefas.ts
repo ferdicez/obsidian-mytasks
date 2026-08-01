@@ -17,7 +17,10 @@ import { DadosTarefaEscrita, escreverFrontmatter, formatarLinkArquivo, lerFrontm
 import { gerarCorpoMetaBind } from "./meta-bind-tarefa";
 import { herdarPropriedadesDaNota, resolverNotaPorAlias, separarSufixoAlias } from "./alias-captura";
 
-function formatarData(data: Date): string {
+// Data local em ISO (AAAA-MM-DD). Exportada porque o menu de ações do cartão precisa do MESMO
+// cálculo ("hoje", "hoje + N dias") — usar `toISOString()` lá jogaria a data pro dia anterior à
+// noite, no fuso do Brasil.
+export function formatarData(data: Date): string {
 	const ano = data.getFullYear();
 	const mes = String(data.getMonth() + 1).padStart(2, "0");
 	const dia = String(data.getDate()).padStart(2, "0");
@@ -421,7 +424,10 @@ export class RepositorioTarefas {
 		return destino;
 	}
 
-	async atualizarData(tarefa: Tarefa, novaData: string, novoHorario?: string | null): Promise<void> {
+	// `novaData` null esvazia o prazo (usado pelo botão "Tirar o prazo" do menu do clique direito). A
+	// chave é esvaziada, NÃO deletada — mesma razão do horário na recorrência: chave ausente quebra o
+	// INPUT[date:...] do Meta Bind na nota, que só escreve em chave que já existe.
+	async atualizarData(tarefa: Tarefa, novaData: string | null, novoHorario?: string | null): Promise<void> {
 		const arquivo = this.app.vault.getAbstractFileByPath(tarefa.caminho);
 		if (!(arquivo instanceof TFile)) return;
 
@@ -626,6 +632,18 @@ export class RepositorioTarefas {
 		await this.app.fileManager.processFrontMatter(arquivoNovo, (fm) => {
 			fm[this.obterConfiguracoes().chavesFixas.ocorrenciaAnterior] = caminhoOrigem;
 		});
+
+		// A próxima ocorrência é uma DUPLICATA da que foi concluída, não uma tarefa em branco: o corpo
+		// da nota vem junto (só o frontmatter é regravado do zero, com a data nova). Pedido da Fernanda:
+		// tarefa recorrente costuma acumular anotações, e ela quer levar o que escreveu na semana passada
+		// para a ocorrência seguinte. `caminhoOrigem` já é o caminho FINAL da concluída (depois do
+		// eventual move para a pasta de Concluídas), então o corpo é lido de lá.
+		const arquivoOrigem = this.app.vault.getAbstractFileByPath(caminhoOrigem);
+		if (arquivoOrigem instanceof TFile) {
+			const corpo = removerFrontmatter(await this.app.vault.read(arquivoOrigem)).trim();
+			if (corpo) await this.app.vault.append(arquivoNovo, "\n" + corpo + "\n");
+		}
+
 		return arquivoNovo;
 	}
 

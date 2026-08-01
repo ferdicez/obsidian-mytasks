@@ -11,6 +11,7 @@ import {
 	ultimaOpcaoStatus,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
+import { abrirMenuAcoesTarefa } from "./menu-acoes-tarefa";
 
 export function corComOpacidade(hex: string, alpha: number): string {
 	const valor = hex.replace("#", "");
@@ -78,6 +79,14 @@ export function desenharCartaoTarefa(
 
 	const item = container.createDiv({ cls: "mytasks-item" });
 	if (estaConcluida) item.addClass("mytasks-item-feito");
+
+	// Menu de ações no clique direito (botões configurados pela usuária + Abrir/Renomear/Excluir).
+	// Fica aqui, no cartão, e não em cada motor: assim Kanban, Calendário, Lista, sidebar e embeds
+	// ganham o menu de uma vez só. Vale inclusive no cartão de lembrete antecipado — ele não é
+	// arrastável (arrastar gravaria uma data errada), mas mudar status por menu é explícito e seguro.
+	item.addEventListener("contextmenu", (evento) => {
+		abrirMenuAcoesTarefa(evento, app, repositorio, configuracoes, tarefa, aoAtualizar);
+	});
 
 	// Com a antecipação ligada, a tarefa aparece em dias que NÃO são o do prazo — então o cartão precisa
 	// dizer que aquilo ainda não é para hoje, senão vira uma tarefa igual às outras num dia que não é o
