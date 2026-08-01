@@ -1349,53 +1349,16 @@
 /* ===== Grupos de tarefas ===== */
 
 /* Linha divisória cinza entre seções das Configurações (e da tela de grupos). */
-/* Seletor de ícone (mesmo motor de busca do Lucide usado no Base Tabs). */
-.mytasks-icon-picker-preview {
+/* Seletor de ícone (FuzzySuggestModal): nome à esquerda, ícone à direita. */
+.mytasks-icon-suggestion {
 	display: flex;
 	align-items: center;
-	gap: var(--size-4-2, 8px);
-	margin-bottom: var(--size-4-3, 12px);
+	justify-content: space-between;
 }
 
-.mytasks-icon-picker-preview-icon {
-	display: inline-flex;
-	width: var(--icon-l, 20px);
-	height: var(--icon-l, 20px);
-	color: var(--text-normal);
-}
-
-.mytasks-icon-picker-search {
-	flex: 1;
-}
-
-.mytasks-icon-picker-results {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
-	gap: var(--size-4-1, 4px);
-	max-height: 240px;
-	overflow-y: auto;
-}
-
-.mytasks-icon-picker-cell {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	aspect-ratio: 1 / 1;
-	border-radius: var(--radius-s, 4px);
+.mytasks-icon-suggestion svg {
+	display: block;
 	color: var(--text-muted);
-	cursor: pointer;
-}
-
-.mytasks-icon-picker-cell:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-}
-
-/* O ícone que já está escolhido fica marcado na grade, pra ela se localizar ao reabrir o seletor. */
-.mytasks-icon-picker-cell-ativa {
-	background: var(--background-modifier-hover);
-	color: var(--text-accent);
-	box-shadow: inset 0 0 0 1px var(--text-accent);
 }
 
 /* Prévia do ícone: no modal do botão e na linha de cada botão em Configurações.

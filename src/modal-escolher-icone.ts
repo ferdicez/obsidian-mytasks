@@ -1,7 +1,21 @@
-import { App, Modal, getIconIds, setIcon } from "obsidian";
+import { App, FuzzyMatch, FuzzySuggestModal, getIconIds, setIcon } from "obsidian";
 
-// Portado do plugin Base Tabs (mesmo motor de busca do Lucide). É uma cópia, e não um import: cada
-// plugin é um repositório independente, sem código compartilhado entre eles.
+/**
+ * Busca de ícones Lucide no estilo da paleta de comandos do Obsidian.
+ *
+ * Portado do plugin Base Tabs (mesmo motor de busca). É uma cópia, e não um import: cada plugin é
+ * um repositório independente, sem código compartilhado entre eles.
+ *
+ * A busca fuzzy, o ranqueamento, a navegação por teclado e a rolagem virtualizada vêm todos de
+ * `FuzzySuggestModal` — por isso a lista pode conter os ~1300 ícones sem corte: só o que está
+ * visível é renderizado. (A versão anterior filtrava por substring, cortava em 60 resultados e
+ * mostrava uma grade fixa de sugestões enquanto o campo estava vazio.)
+ *
+ * Aqui os ids são guardados SEM o prefixo `lucide-`, que é o formato já gravado nos botões de ação
+ * e o que `setIcon` recebe. Não mudar isso sem migrar os dados salvos.
+ */
+
+const SEM_ICONE = "Sem ícone";
 
 let idsCache: string[] | null = null;
 
@@ -13,128 +27,52 @@ function todosOsIcones(): string[] {
 	return idsCache;
 }
 
-const MAX_RESULTADOS = 60;
-
-// Mostrados antes de digitar qualquer coisa, pra grade não abrir vazia. São os que mais combinam com
-// botões de tarefa (prazo, status, prioridade) — atalho pro caso comum, sem tirar a busca de ninguém.
-const SUGESTOES = [
-	"sun",
-	"calendar",
-	"calendar-clock",
-	"calendar-x",
-	"clock",
-	"arrow-right",
-	"arrow-up",
-	"arrow-down",
-	"inbox",
-	"check",
-	"check-circle",
-	"circle-play",
-	"pause",
-	"flag",
-	"star",
-	"zap",
-	"flame",
-	"tag",
-	"user",
-	"folder",
-	"archive",
-	"trash",
-];
-
-/**
- * Modal com busca + grade de ícones Lucide. Digitar filtra por substring; clicar seleciona e fecha.
- * `aoEscolher(undefined)` limpa o ícone.
- */
-export class ModalEscolherIcone extends Modal {
-	private inputEl!: HTMLInputElement;
-	private resultadosEl!: HTMLElement;
-	private previewEl!: HTMLElement;
-	private valor: string | undefined;
-
+export class ModalEscolherIcone extends FuzzySuggestModal<string> {
 	constructor(
 		app: App,
 		private titulo: string,
-		valorInicial: string | undefined,
+		private valorInicial: string | undefined,
 		private aoEscolher: (icone: string | undefined) => void
 	) {
 		super(app);
-		this.valor = valorInicial;
+		this.setPlaceholder(`${this.titulo} — busque por nome`);
+		this.setInstructions([
+			{ command: "↑↓", purpose: "navegar" },
+			{ command: "↵", purpose: "escolher" },
+			{ command: "esc", purpose: "cancelar" },
+		]);
 	}
 
-	onOpen(): void {
-		this.titleEl.setText(this.titulo);
-		const wrap = this.contentEl.createDiv({ cls: "mytasks-icon-picker" });
-
-		const linha = wrap.createDiv({ cls: "mytasks-icon-picker-preview" });
-		this.previewEl = linha.createSpan({ cls: "mytasks-icon-picker-preview-icon" });
-		this.renderPreview();
-
-		this.inputEl = linha.createEl("input", {
-			type: "text",
-			placeholder: "Buscar ícone (ex.: calendar, star, check)...",
-			cls: "mytasks-icon-picker-search",
-		});
-
-		const limpar = linha.createEl("button", { text: "Sem ícone", cls: "mytasks-icon-picker-clear" });
-		limpar.addEventListener("click", () => {
-			this.valor = undefined;
-			this.aoEscolher(undefined);
-			this.close();
-		});
-
-		this.resultadosEl = wrap.createDiv({ cls: "mytasks-icon-picker-results" });
-
-		this.inputEl.addEventListener("input", () => this.renderResultados(this.inputEl.value.trim().toLowerCase()));
-		this.renderResultados("");
-		window.setTimeout(() => this.inputEl.focus(), 0);
+	getItems(): string[] {
+		// "Sem ícone" primeiro, e a lista inteira depois — sem slice: o modal só renderiza o visível.
+		return [SEM_ICONE, ...todosOsIcones()];
 	}
 
-	private renderPreview(): void {
-		this.previewEl.empty();
-		if (this.valor) setIcon(this.previewEl, this.valor);
+	getItemText(icone: string): string {
+		return icone;
 	}
 
-	private renderResultados(query: string): void {
-		this.resultadosEl.empty();
+	async onOpen(): Promise<void> {
+		await super.onOpen();
+		// Abrir já com o ícone atual no campo mostra onde o botão está antes de trocar.
+		if (this.valorInicial) {
+			this.inputEl.value = this.valorInicial;
+			this.inputEl.trigger("input");
+		}
+	}
 
-		// Sem busca, mostra as sugestões — filtradas contra a lista real do Obsidian, pra que um nome
-		// que mude de uma versão do Lucide pra outra apenas suma da grade em vez de virar célula vazia.
-		if (!query) {
-			const disponiveis = new Set(todosOsIcones());
-			this.desenharCelulas(SUGESTOES.filter((id) => disponiveis.has(id)));
+	renderSuggestion(match: FuzzyMatch<string>, el: HTMLElement): void {
+		el.addClass("mytasks-icon-suggestion");
+		const nome = el.createSpan();
+		nome.setText(match.item);
+		if (match.item === SEM_ICONE) {
+			el.addClass("cm-em");
 			return;
 		}
-
-		const matches = todosOsIcones()
-			.filter((id) => id.includes(query))
-			.slice(0, MAX_RESULTADOS);
-
-		if (matches.length === 0) {
-			this.resultadosEl.createEl("p", {
-				cls: "setting-item-description",
-				text: "Nenhum ícone encontrado.",
-			});
-			return;
-		}
-
-		this.desenharCelulas(matches);
+		setIcon(el.createSpan(), match.item);
 	}
 
-	private desenharCelulas(ids: string[]): void {
-		for (const id of ids) {
-			const celula = this.resultadosEl.createDiv({ cls: "mytasks-icon-picker-cell", attr: { title: id } });
-			setIcon(celula, id);
-			if (id === this.valor) celula.addClass("mytasks-icon-picker-cell-ativa");
-			celula.addEventListener("click", () => {
-				this.valor = id;
-				this.aoEscolher(id);
-				this.close();
-			});
-		}
-	}
-
-	onClose(): void {
-		this.contentEl.empty();
+	onChooseItem(icone: string): void {
+		this.aoEscolher(icone === SEM_ICONE ? undefined : icone);
 	}
 }
