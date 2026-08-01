@@ -1228,14 +1228,20 @@
 }
 
 .mytasks-kanban-grade {
-	display: flex;
-	/* `align-items: stretch` (o padrão) é o que faz a coluna curta ir até embaixo da área visível —
-	   as divisórias descem a tela inteira mesmo com o quadro quase vazio. A tentativa anterior trocou
-	   isto por `flex-start` pra resolver o caso oposto (conteúdo transbordando), e aí as divisórias
-	   passaram a parar na altura da última tarefa: sem stretch, a coluna encolhe pro tamanho do
-	   conteúdo. Os dois casos são resolvidos por stretch + `min-height: max-content` na coluna
-	   (abaixo) — stretch define a altura usada, min-height só levanta o piso quando o conteúdo é
-	   mais alto que a dobra. */
+	/* Grid, não flex, e a razão é a altura das divisórias. Este bug já teve duas correções em flex
+	   que se derrubaram: `flex-start` fazia a coluna encolher até a última tarefa (divisória parando
+	   no meio num quadro cheio), e `stretch` + `min-height: max-content` na coluna resolvia só metade
+	   — `max-content` mede a PRÓPRIA coluna, então a coluna curta não ganha piso nenhum, e o stretch
+	   do flex estica só até a altura VISÍVEL. Bastava outra coluna transbordar pra curta voltar a
+	   morrer na dobra.
+	   No grid o stretch é resolvido contra a LINHA, e a linha é dimensionada pela coluna mais alta,
+	   inclusive na parte que passa da dobra. Uma regra só cobre os dois casos: quadro vazio (todas
+	   descem até embaixo) e quadro transbordando (todas acompanham a mais alta até o fim do scroll). */
+	display: grid;
+	grid-auto-flow: column;
+	/* Cada coluna é uma trilha de largura igual; `minmax` preserva o piso de 220px da coluna e deixa
+	   a grade transbordar na horizontal em vez de espremer tudo. */
+	grid-auto-columns: minmax(220px, 1fr);
 	align-items: stretch;
 	gap: 0;
 	flex: 1;
@@ -1257,14 +1263,10 @@
 .mytasks-kanban-coluna {
 	display: flex;
 	flex-direction: column;
-	min-width: 220px;
-	/* O stretch da grade já dá a altura VISÍVEL (coluna curta desce até embaixo da tela). Este
-	   `min-height: max-content` cobre o caso do conteúdo transbordar: aí a coluna passa da dobra e
-	   leva o border-right junto até o fim do scroll, em vez de parar onde a área visível acabava.
-	   Sem `100%` aqui de propósito — percentual de altura dentro de um flex que rola não resolve
-	   pra altura visível, e era isso que travava a divisória na altura da última tarefa. */
-	min-height: max-content;
-	flex: 1 0 0;
+	/* Largura e altura agora vêm da grade (grid-auto-columns + stretch contra a linha). Sem
+	   `min-height: max-content` aqui de propósito: ele media só a própria coluna, então não dava piso
+	   nenhum à coluna curta — era metade da causa da divisória parar no meio. E sem `flex: 1 0 0`,
+	   que não tem efeito em item de grid. */
 	padding: 8px;
 	background: var(--background-primary);
 	border-right: 1px solid var(--gt-borda-coluna);
