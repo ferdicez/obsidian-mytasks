@@ -53,6 +53,7 @@ export class VistaKanbanAba extends ItemView {
 			repositorio: this.plugin.repositorioDoGrupo(grupo.id),
 			configuracoes: configEfetiva,
 			agrupamentoInicial: configEfetiva.agrupamentoPadraoKanban,
+			subagrupamentoInicial: configEfetiva.subagrupamentoPadraoKanban,
 			filtroInicialId: configEfetiva.filtroPadraoKanbanId,
 			filtro: (t) => tarefaPertenceAoGrupo(t, grupo, this.plugin.configuracoes),
 			configuracoesGlobais: this.plugin.configuracoes,

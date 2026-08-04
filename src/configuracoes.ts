@@ -30,6 +30,10 @@ import {
 	camposCapturaPadrao,
 	camposDaCaptura,
 	CampoCaptura,
+	ID_ANTECEDENCIA_ACAO,
+	ID_MANTER_HISTORICO_ACAO,
+	ID_RECORRENCIA_ACAO,
+	IDS_CAMPOS_COMPORTAMENTO,
 	campoEhOpcional,
 	campoPodeSerOpcional,
 	campoVisivelNaNota,
@@ -298,8 +302,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		const grupo = this.grupo;
 		if (!grupo.calendariosExternos) grupo.calendariosExternos = [];
 
-		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
-		containerEl.createEl("h3", { text: "Agendas externas" });
+		// Sem hr/h3 próprios: o título vem do acordeão que envolve esta seção (ver renderizarPaginaCalendario).
 		containerEl.createEl("p", {
 			text: `Mostra os compromissos do Google Agenda no calendário de "${grupo.nome}", junto das tarefas deste grupo. Só leitura: nada é criado, editado ou apagado na sua agenda.`,
 			cls: "setting-item-description",
@@ -767,15 +770,43 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private renderizarPaginaCalendario(containerEl: HTMLElement): void {
-		this.renderizarFiltroPadrao(
-			containerEl,
-			"Filtro padrão",
-			() => this.grupo.filtroPadraoCalendarioId,
-			(id) => (this.grupo.filtroPadraoCalendarioId = id)
+		criarAcordeao(containerEl, {
+			chave: "calendario/abertura",
+			titulo: "Como o calendário abre",
+			descricao: "Filtro aplicado toda vez que a tela é aberta.",
+			abertoPorPadrao: true,
+		}).sePreenchido((corpo) =>
+			this.renderizarFiltroPadrao(
+				corpo,
+				"Filtro padrão",
+				() => this.grupo.filtroPadraoCalendarioId,
+				(id) => (this.grupo.filtroPadraoCalendarioId = id)
+			)
 		);
 
-		this.renderizarColunasDaLista(containerEl);
+		criarAcordeao(containerEl, {
+			chave: "calendario/lista",
+			titulo: "Visualização “Lista”",
+			descricao: "As duas colunas da primeira aba do calendário.",
+		}).sePreenchido((corpo) => this.renderizarColunasDaLista(corpo));
 
+		criarAcordeao(containerEl, {
+			chave: "calendario/detalhes",
+			titulo: "Detalhes nas tarefas",
+			descricao: "O que aparece embaixo do título de cada tarefa, em cada modo do calendário.",
+		}).sePreenchido((corpo) => this.renderizarDetalhesDoCalendario(corpo));
+
+		criarAcordeao(containerEl, {
+			chave: "calendario/externos",
+			titulo: "Agendas externas",
+			descricao: "Calendários do Google (ou outros) exibidos junto das tarefas deste grupo.",
+		}).sePreenchido((corpo) => this.renderizarCalendariosExternos(corpo));
+	}
+
+	// O interruptor de detalhes e, quando ligado, as propriedades visíveis modo a modo. Separado da
+	// página porque o toggle chama display() — que reconstrói tudo — e o acordeão precisa redesenhar
+	// só o próprio corpo pra não perder o estado das outras seções.
+	private renderizarDetalhesDoCalendario(containerEl: HTMLElement): void {
 		new Setting(containerEl)
 			.setName("Mostrar detalhes nas tarefas do calendário")
 			.setDesc("Exibe status e propriedades abaixo do título de cada tarefa nas visões de calendário.")
@@ -787,22 +818,23 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				})
 			);
 
-		// Antes do early-return abaixo: as agendas externas não têm nada a ver com "mostrar detalhes
-		// nas tarefas", e some da tela se ficarem depois dele.
-		this.renderizarCalendariosExternos(containerEl);
-
 		if (!this.grupo.calendarioMostrarDetalhes) return;
 
-		containerEl.createEl("hr", { cls: "mytasks-config-divisoria" });
-
+		// Um acordeão aninhado por modo: são quatro listas longas de propriedades, e todas abertas de
+		// uma vez enterram o interruptor acima.
 		for (const modo of MODOS_CALENDARIO) {
-			containerEl.createEl("h3", { text: ROTULOS_MODO[modo] });
-			this.renderizarPropriedadesVisiveis(
-				containerEl,
-				`Propriedades visíveis — ${ROTULOS_MODO[modo]}`,
-				() => this.grupo.calendarioPropriedadesVisiveisPorModo[modo],
-				(lista) => (this.grupo.calendarioPropriedadesVisiveisPorModo[modo] = lista),
-				[ID_DATA_ENTRADA]
+			criarAcordeao(containerEl, {
+				chave: `calendario/detalhes/${modo}`,
+				titulo: ROTULOS_MODO[modo],
+				aninhado: true,
+			}).sePreenchido((corpo) =>
+				this.renderizarPropriedadesVisiveis(
+					corpo,
+					`Propriedades visíveis — ${ROTULOS_MODO[modo]}`,
+					() => this.grupo.calendarioPropriedadesVisiveisPorModo[modo],
+					(lista) => (this.grupo.calendarioPropriedadesVisiveisPorModo[modo] = lista),
+					[ID_DATA_ENTRADA]
+				)
 			);
 		}
 	}
@@ -810,7 +842,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	// A visualização "Lista" do calendário: duas colunas, cada uma mostrando uma Visualização salva.
 	// Fica na página do Calendário porque é uma das visões dele (a primeira aba, antes de "Dia").
 	private renderizarColunasDaLista(containerEl: HTMLElement): void {
-		containerEl.createEl("h3", { text: "Visualização “Lista”" });
+		// Sem h3 próprio: o título vem do acordeão que envolve esta seção (ver renderizarPaginaCalendario).
 		containerEl.createEl("p", {
 			text: "A primeira aba do calendário mostra duas colunas lado a lado. Escolha abaixo qual Visualização salva aparece em cada uma.",
 			cls: "setting-item-description",
@@ -858,59 +890,95 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	}
 
 	private renderizarPaginaKanban(containerEl: HTMLElement): void {
-		this.renderizarAgrupamentoPadrao(
-			containerEl,
-			"Agrupamento padrão",
-			false,
-			false,
-			() => this.grupo.agrupamentoPadraoKanban,
-			(agrupamento) => (this.grupo.agrupamentoPadraoKanban = agrupamento)
-		);
-		this.renderizarFiltroPadrao(
-			containerEl,
-			"Filtro padrão",
-			() => this.grupo.filtroPadraoKanbanId,
-			(id) => (this.grupo.filtroPadraoKanbanId = id)
-		);
-		this.renderizarPropriedadesVisiveis(
-			containerEl,
-			"Propriedades visíveis no kanban",
-			() => this.grupo.kanbanPropriedadesVisiveis,
-			(lista) => (this.grupo.kanbanPropriedadesVisiveis = lista)
+		criarAcordeao(containerEl, {
+			chave: "kanban/abertura",
+			titulo: "Como o Kanban abre",
+			descricao: "Agrupamento, subagrupamento e filtro aplicados toda vez que a tela é aberta.",
+			abertoPorPadrao: true,
+		}).sePreenchido((corpo) => {
+			this.renderizarAgrupamentoPadrao(
+				corpo,
+				"Agrupamento padrão",
+				false,
+				false,
+				() => this.grupo.agrupamentoPadraoKanban,
+				(agrupamento) => (this.grupo.agrupamentoPadraoKanban = agrupamento)
+			);
+			// Subagrupamento aceita "nenhum" (é o padrão: coluna corrida) e não aceita "Dia", que só faz
+			// sentido como agrupamento principal. Escolher aqui o mesmo valor do agrupamento não quebra: o
+			// motor já anula o subagrupamento quando os dois coincidem (ver subagrupamentoEfetivo).
+			this.renderizarAgrupamentoPadrao(
+				corpo,
+				"Subagrupamento padrão",
+				true,
+				false,
+				() => this.grupo.subagrupamentoPadraoKanban,
+				(agrupamento) => (this.grupo.subagrupamentoPadraoKanban = agrupamento),
+				'Divide cada coluna em seções ao abrir. "nenhum" deixa a coluna corrida, como sempre.'
+			);
+			this.renderizarFiltroPadrao(
+				corpo,
+				"Filtro padrão",
+				() => this.grupo.filtroPadraoKanbanId,
+				(id) => (this.grupo.filtroPadraoKanbanId = id)
+			);
+		});
+
+		criarAcordeao(containerEl, {
+			chave: "kanban/cartao",
+			titulo: "Cartão do Kanban",
+			descricao: "O que aparece embaixo do título de cada tarefa.",
+		}).sePreenchido((corpo) =>
+			this.renderizarPropriedadesVisiveis(
+				corpo,
+				"Propriedades visíveis no kanban",
+				() => this.grupo.kanbanPropriedadesVisiveis,
+				(lista) => (this.grupo.kanbanPropriedadesVisiveis = lista)
+			)
 		);
 	}
 
 	private renderizarPaginaTarefas(containerEl: HTMLElement): void {
-		containerEl.createEl("h3", { text: "Lista de tarefas" });
-		this.renderizarAgrupamentoPadrao(
-			containerEl,
-			"Agrupamento padrão",
-			true,
-			true,
-			() => this.grupo.agrupamentoPadraoLista,
-			(agrupamento) => (this.grupo.agrupamentoPadraoLista = agrupamento)
-		);
-		this.renderizarFiltroPadrao(
-			containerEl,
-			"Filtro padrão",
-			() => this.grupo.filtroPadraoListaId,
-			(id) => (this.grupo.filtroPadraoListaId = id)
-		);
-		this.renderizarPropriedadesVisiveis(
-			containerEl,
-			"Propriedades visíveis na lista",
-			() => this.grupo.listaPropriedadesVisiveis,
-			(lista) => (this.grupo.listaPropriedadesVisiveis = lista)
-		);
+		criarAcordeao(containerEl, {
+			chave: "tarefas/lista",
+			titulo: "Lista de tarefas",
+			descricao: "Como a lista abre e o que aparece em cada tarefa.",
+			abertoPorPadrao: true,
+		}).sePreenchido((corpo) => {
+			this.renderizarAgrupamentoPadrao(
+				corpo,
+				"Agrupamento padrão",
+				true,
+				true,
+				() => this.grupo.agrupamentoPadraoLista,
+				(agrupamento) => (this.grupo.agrupamentoPadraoLista = agrupamento)
+			);
+			this.renderizarFiltroPadrao(
+				corpo,
+				"Filtro padrão",
+				() => this.grupo.filtroPadraoListaId,
+				(id) => (this.grupo.filtroPadraoListaId = id)
+			);
+			this.renderizarPropriedadesVisiveis(
+				corpo,
+				"Propriedades visíveis na lista",
+				() => this.grupo.listaPropriedadesVisiveis,
+				(lista) => (this.grupo.listaPropriedadesVisiveis = lista)
+			);
+		});
 
-		containerEl.createEl("h3", { text: "Inbox" });
-		this.renderizarPropriedadesVisiveis(
-			containerEl,
-			"Propriedades visíveis no Inbox",
-			() => this.grupo.listaInboxPropriedadesVisiveis,
-			(lista) => (this.grupo.listaInboxPropriedadesVisiveis = lista)
+		criarAcordeao(containerEl, {
+			chave: "tarefas/inbox",
+			titulo: "Inbox",
+			descricao: "A caixa de entrada da barra lateral.",
+		}).sePreenchido((corpo) =>
+			this.renderizarPropriedadesVisiveis(
+				corpo,
+				"Propriedades visíveis no Inbox",
+				() => this.grupo.listaInboxPropriedadesVisiveis,
+				(lista) => (this.grupo.listaInboxPropriedadesVisiveis = lista)
+			)
 		);
-
 	}
 
 	// ---------------------------------------------------------------------
@@ -947,6 +1015,21 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				})
 			);
 
+		// Só vale quando NADA foi escolhido na captura — campo marcado e preset continuam vencendo.
+		new Setting(containerEl)
+			.setName("Status inicial das capturas")
+			.setDesc(
+				'Com que status a tarefa nasce quando você só digita e dá Enter. "Automático" mantém a regra de sempre: com prazo vai para a segunda opção da lista, sem prazo fica no Inbox. Marcar o status na captura ou usar um preset continua vencendo isto.'
+			)
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", "Automático (pelo prazo)");
+				for (const opcao of this.grupo.status.opcoes) dropdown.addOption(opcao.valor, opcao.valor);
+				dropdown.setValue(captura.statusPadrao ?? "");
+				dropdown.onChange(async (valor) => {
+					captura.statusPadrao = valor || null;
+					await this.plugin.salvarConfiguracoes();
+				});
+			});
 	}
 
 	private renderizarSecaoPresets(containerEl: HTMLElement): void {
@@ -982,10 +1065,15 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		// carregada — camposDaCaptura cobre os dois formatos.
 		const campos = camposDaCaptura(captura);
 
-		// Todos os campos que a captura pode mostrar: os dois fixos + as propriedades do grupo.
+		// Todos os campos que a captura pode mostrar: os dois fixos, os três de comportamento e as
+		// propriedades do grupo. Recorrência só entra com o recurso ligado no grupo — a mesma regra que
+		// já a esconde do modal de tarefa e da nota.
 		const oferecidos: { id: string; rotulo: string; tipo?: string }[] = [
 			{ id: ID_DATA_ACAO, rotulo: this.grupo.dataTarefa.rotulo || "Prazo" },
 			{ id: ID_STATUS, rotulo: this.grupo.status.rotulo || "Status" },
+			...(this.grupo.recorrenciaAtiva ? [{ id: ID_RECORRENCIA_ACAO, rotulo: "Recorrência" }] : []),
+			{ id: ID_ANTECEDENCIA_ACAO, rotulo: "Avisar com antecedência" },
+			{ id: ID_MANTER_HISTORICO_ACAO, rotulo: "Manter no histórico" },
 			...this.grupo.propriedades.map((p) => ({ id: p.id, rotulo: p.rotulo, tipo: p.tipo as string })),
 		];
 
@@ -1074,6 +1162,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	// Um campo pode virar "botões"? Só com lista fechada de opções conhecida de antemão.
 	private campoAceitaBotoes(campo: { id: string; tipo?: string }): boolean {
 		if (campo.id === ID_STATUS || campo.id === ID_DATA_ACAO) return true;
+		// Os três de comportamento têm lista fixa própria (ver opcoesDoCampo em area-captura.ts).
+		if (IDS_CAMPOS_COMPORTAMENTO.includes(campo.id)) return true;
 		const def = this.grupo.propriedades.find((p) => p.id === campo.id);
 		if (!def) return false;
 		if (def.tipo === "selecao") return (def.opcoes?.length ?? 0) > 0;
@@ -1491,12 +1581,13 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		permitirNenhum: boolean,
 		permitirDia: boolean,
 		obterAtual: () => TipoAgrupamento,
-		definir: (agrupamento: TipoAgrupamento) => void
+		definir: (agrupamento: TipoAgrupamento) => void,
+		descricao = "Agrupamento com que esta tela abre sempre que você a acessa."
 	) {
 		const opcoes = opcoesDeAgrupamento(this.configEfetiva, permitirNenhum, permitirDia);
 		new Setting(container)
 			.setName(titulo)
-			.setDesc("Agrupamento com que esta tela abre sempre que você a acessa.")
+			.setDesc(descricao)
 			.addDropdown((dropdown) => {
 				for (const opcao of opcoes) {
 					dropdown.addOption(opcao, rotuloAgrupamento(opcao, this.configEfetiva));
@@ -1688,7 +1779,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	// ---------------------------------------------------------------------
 
 	private renderizarSecaoBotoesAcao(containerEl: HTMLElement): void {
-		containerEl.createEl("h3", { text: "Menu do clique direito" });
+		// Sem h3 próprio: o título vem do acordeão que envolve esta seção (ver renderizarPaginaGeral).
 		containerEl.createEl("p", {
 			text: "Botões que aparecem ao clicar com o botão direito em cima de uma tarefa, no Kanban, no Calendário e na Lista. Cada botão pode alterar um ou vários campos de uma vez.",
 			cls: "setting-item-description",

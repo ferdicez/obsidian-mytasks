@@ -3,15 +3,24 @@ import {
 	AcaoBotao,
 	CampoCaptura,
 	ConfigEfetivaGrupo,
+	ID_ANTECEDENCIA_ACAO,
 	ID_DATA_ACAO,
+	ID_MANTER_HISTORICO_ACAO,
+	ID_RECORRENCIA_ACAO,
 	ID_STATUS,
+	IDS_CAMPOS_COMPORTAMENTO,
+	OPCOES_ANTECEDENCIA_CAPTURA,
+	OPCOES_MANTER_HISTORICO_CAPTURA,
 	PresetCaptura,
 	PropriedadeDefinida,
 	PropriedadeValor,
+	RECORRENCIA_LABELS,
+	Recorrencia,
 	camposDaCaptura,
 } from "./tipos";
 import { RepositorioTarefas, formatarData } from "./repositorio-tarefas";
 import { SugestorArquivos } from "./sugestor-arquivos";
+import { rotuloDeArquivoNaCaptura } from "./alias-captura";
 
 // Valores pendentes na área de captura, antes de virarem tarefa. As chaves são IDs de campo
 // (ID_STATUS, ID_DATA_ACAO ou id de propriedade), iguais aos de AcaoBotao.campo.
@@ -125,6 +134,20 @@ export class AreaCaptura {
 				resultado.push({ ...campo, rotulo: cfg.dataTarefa.rotulo || "Prazo" });
 				continue;
 			}
+			// Recorrência só aparece se o recurso estiver ligado no grupo — mesma regra que já esconde o
+			// campo do modal de editar tarefa e da nota (ver campoVisivelNaNota).
+			if (campo.id === ID_RECORRENCIA_ACAO) {
+				if (cfg.recorrenciaAtiva) resultado.push({ ...campo, rotulo: "Recorrência" });
+				continue;
+			}
+			if (campo.id === ID_ANTECEDENCIA_ACAO) {
+				resultado.push({ ...campo, rotulo: "Avisar antes" });
+				continue;
+			}
+			if (campo.id === ID_MANTER_HISTORICO_ACAO) {
+				resultado.push({ ...campo, rotulo: "Histórico" });
+				continue;
+			}
 			// Uma propriedade removida em Configurações depois de ter sido posta na captura simplesmente
 			// some da barra, em vez de desenhar um controle sem opções que gravaria lixo.
 			const def = cfg.propriedades.find((p) => p.id === campo.id);
@@ -152,6 +175,17 @@ export class AreaCaptura {
 			return cfg.status.opcoes.map((o) => ({ valor: o.valor, rotulo: o.valor }));
 		}
 
+		// Recorrência: as mesmas opções do modal de editar tarefa, menos "Não repete" — na captura, não
+		// marcar nada JÁ é "não repete", e uma pastilha pra isso só ocuparia espaço.
+		if (campo.id === ID_RECORRENCIA_ACAO) {
+			return (Object.keys(RECORRENCIA_LABELS) as Recorrencia[])
+				.filter((r) => r !== "nenhuma")
+				.map((r) => ({ valor: r, rotulo: RECORRENCIA_LABELS[r] }));
+		}
+
+		if (campo.id === ID_ANTECEDENCIA_ACAO) return OPCOES_ANTECEDENCIA_CAPTURA;
+		if (campo.id === ID_MANTER_HISTORICO_ACAO) return OPCOES_MANTER_HISTORICO_CAPTURA;
+
 		if (campo.def?.tipo === "selecao") {
 			return (campo.def.opcoes ?? []).map((o) => ({ valor: o.valor, rotulo: o.valor }));
 		}
@@ -163,7 +197,11 @@ export class AreaCaptura {
 			if (fixos.length === 0) return null;
 			return fixos.map((caminho) => ({
 				valor: caminho,
-				rotulo: caminho.split("/").pop()?.replace(/\.md$/, "") ?? caminho,
+				rotulo: rotuloDeArquivoNaCaptura(
+					this.opcoes.app,
+					caminho,
+					campo.def?.exibirAliasNaCaptura ?? false
+				),
 			}));
 		}
 
@@ -281,8 +319,11 @@ export class AreaCaptura {
 	private rotuloDoValor(campo: { def?: PropriedadeDefinida }, valor: PropriedadeValor): string {
 		if (Array.isArray(valor)) return valor.join(", ");
 		if (typeof valor !== "string") return String(valor);
-		// Link de arquivo guarda o caminho completo; na pastilha só cabe (e só interessa) o nome da nota.
-		if (campo.def?.tipo === "link_arquivo") return valor.split("/").pop()?.replace(/\.md$/, "") ?? valor;
+		// Link de arquivo guarda o caminho completo; na pastilha só cabe (e só interessa) o nome da nota
+		// — ou o alias dela, se a propriedade estiver configurada assim.
+		if (campo.def?.tipo === "link_arquivo") {
+			return rotuloDeArquivoNaCaptura(this.opcoes.app, valor, campo.def.exibirAliasNaCaptura ?? false);
+		}
 		return valor;
 	}
 
@@ -506,19 +547,29 @@ export class AreaCaptura {
 		// propriedade de status tenha sido marcada por engano.
 		const status = this.opcoes.statusFixo ?? valores[ID_STATUS];
 		const data = valores[ID_DATA_ACAO];
-		// Só as propriedades customizadas seguem em `propriedades` — status e prazo têm caminho próprio
-		// em criarTarefaRapida (regra posicional de status, chave da data).
+		// Só as propriedades customizadas seguem em `propriedades` — status, prazo e os três campos de
+		// comportamento têm caminho próprio em criarTarefaRapida (regra posicional de status, chave da
+		// data, chaves fixas de recorrência/antecedência/histórico).
 		const propriedades: Record<string, PropriedadeValor> = {};
 		for (const [id, valor] of Object.entries(valores)) {
 			if (id === ID_STATUS || id === ID_DATA_ACAO) continue;
+			if (IDS_CAMPOS_COMPORTAMENTO.includes(id)) continue;
 			propriedades[id] = valor;
 		}
+
+		const recorrencia = valores[ID_RECORRENCIA_ACAO];
+		const antecedencia = valores[ID_ANTECEDENCIA_ACAO];
+		const manterHistorico = valores[ID_MANTER_HISTORICO_ACAO];
 
 		try {
 			await this.opcoes.repositorio.criarTarefaRapida(titulo, {
 				status: typeof status === "string" ? status : null,
 				data: typeof data === "string" ? data : null,
 				propriedades,
+				recorrencia: typeof recorrencia === "string" ? (recorrencia as Recorrencia) : null,
+				diasAntecedenciaAviso: typeof antecedencia === "string" ? Number(antecedencia) : null,
+				// Só uma escolha explícita decide; sem marcar nada, a nota modelo continua mandando.
+				manterHistorico: typeof manterHistorico === "string" ? manterHistorico === "sim" : null,
 			});
 		} catch (erro) {
 			console.error("[my-tasks] falha ao capturar tarefa", erro);

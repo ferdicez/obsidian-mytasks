@@ -329,11 +329,16 @@
 	gap: 4px;
 }
 
+/* O padding vem de variáveis porque o destaque "fundo colorido" precisa devolvê-lo em margem
+   negativa (ver .mytasks-item-fundo-destaque). Cada contexto que aperta o cartão — as listas do
+   calendário, por exemplo — só troca as variáveis, e a faixa colorida acompanha sozinha. */
 .mytasks-item {
+	--mytasks-item-padding-y: 6px;
+	--mytasks-item-padding-x: 8px;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 6px 8px;
+	padding: var(--mytasks-item-padding-y) var(--mytasks-item-padding-x);
 	border-radius: 6px;
 	transition: background-color 0.15s ease;
 }
@@ -366,11 +371,30 @@
 	border-left: none;
 }
 
-/* Destaque "linha": o cartão inteiro pintado com a cor da opção da propriedade. A cor em si é
-   aplicada inline em render-tarefa.ts; aqui só o formato. Cede a vez pro lembrete enquanto ele
-   estiver pintando — os dois disputam o mesmo fundo. */
+/* Destaque "linha": a faixa colorida da opção da propriedade. A cor vem inline em render-tarefa.ts
+   (variável --mytasks-cor-fundo); aqui só o formato. Cede a vez pro lembrete enquanto ele estiver
+   pintando — os dois disputam o mesmo fundo.
+
+   A cor NÃO vai no item inteiro: ela passaria por baixo do checkbox e apagaria a bolinha de marcar.
+   Quem recebe o fundo é o conteúdo (.mytasks-info), que começa depois do checkbox. As margens
+   negativas devolvem o padding/gap do cartão, pra faixa encostar nas bordas de cima, baixo e
+   direita — só a esquerda para antes do checkbox. */
 .mytasks-item-fundo-destaque {
 	border-radius: 6px;
+}
+
+.mytasks-item-fundo-destaque > .mytasks-info {
+	background-color: var(--mytasks-cor-fundo);
+	margin: calc(-1 * var(--mytasks-item-padding-y)) calc(-1 * var(--mytasks-item-padding-x))
+		calc(-1 * var(--mytasks-item-padding-y)) 0;
+	padding: var(--mytasks-item-padding-y) var(--mytasks-item-padding-x);
+	border-radius: 6px;
+}
+
+/* Sem checkbox (ex.: cartões só-leitura), o conteúdo é o cartão inteiro: a faixa volta a ocupar
+   toda a largura, senão sobraria uma tira sem cor à esquerda. */
+.mytasks-item-fundo-destaque > .mytasks-info:first-child {
+	margin-left: calc(-1 * var(--mytasks-item-padding-x));
 }
 
 /* Lembrete antecipado: a tarefa está aparecendo num dia que NÃO é o do prazo (só quando
@@ -935,6 +959,25 @@
 	min-width: 0;
 }
 
+/* Divisória entre as duas colunas. Vai na borda ESQUERDA da segunda (em vez da direita da primeira)
+   pra não deixar um traço solto quando só existe uma coluna. O padding devolve metade do gap, pra
+   linha ficar no meio do vão em vez de colada no conteúdo da direita. */
+.mytasks-calendario-lista-coluna + .mytasks-calendario-lista-coluna {
+	border-left: 1px solid var(--gt-borda-fraca, var(--background-modifier-border));
+	padding-left: 8px;
+}
+
+/* Empilhado (mesma largura do @media acima), a divisória vertical passaria a separar de lado duas
+   colunas que agora estão uma embaixo da outra. Vira linha horizontal no topo da segunda. */
+@media (max-width: 700px) {
+	.mytasks-calendario-lista-coluna + .mytasks-calendario-lista-coluna {
+		border-left: none;
+		padding-left: 0;
+		border-top: 1px solid var(--gt-borda-fraca, var(--background-modifier-border));
+		padding-top: 12px;
+	}
+}
+
 .mytasks-calendario-lista-titulo {
 	font-size: 0.85em;
 	font-weight: 600;
@@ -1057,7 +1100,8 @@
 }
 
 .mytasks-calendario-lista-dia .mytasks-item {
-	padding: 3px 6px;
+	--mytasks-item-padding-y: 3px;
+	--mytasks-item-padding-x: 6px;
 	border-radius: 5px;
 	font-size: 0.78em;
 	gap: 5px;
@@ -1317,7 +1361,8 @@
 
 .mytasks-calendario-celula-hora .mytasks-item,
 .mytasks-calendario-corpo-sem-horario .mytasks-item {
-	padding: 3px 5px;
+	--mytasks-item-padding-y: 3px;
+	--mytasks-item-padding-x: 5px;
 	border-radius: 5px;
 	font-size: 0.78em;
 	gap: 4px;
@@ -1336,7 +1381,8 @@
 }
 
 .mytasks-calendario-coluna-dia .mytasks-item {
-	padding: 6px 5px;
+	--mytasks-item-padding-y: 6px;
+	--mytasks-item-padding-x: 5px;
 	font-size: 0.78em;
 }
 

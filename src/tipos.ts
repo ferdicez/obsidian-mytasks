@@ -65,6 +65,38 @@ export const ID_STATUS = "status";
 // render-tarefa.ts — seria circular, já que render-tarefa importa daqui.
 export const ID_DATA_ACAO = "data";
 
+// Campos da tarefa que não são propriedade customizada nem status/prazo, mas que a captura pode
+// oferecer: os três controles de comportamento da tarefa. Ficam com id próprio (e não com a chave do
+// frontmatter) pela mesma razão de ID_STATUS/ID_DATA_ACAO — a chave é renomeável em Configurações →
+// Avançado, e o campo da captura continua apontando pro lugar certo depois da renomeação.
+export const ID_RECORRENCIA_ACAO = "recorrencia";
+export const ID_ANTECEDENCIA_ACAO = "antecedencia";
+export const ID_MANTER_HISTORICO_ACAO = "manter_historico";
+
+// Os três acima, juntos: quem trata "campo da captura" precisa distinguir esses do resto (eles não
+// entram em `propriedades`, têm caminho próprio na criação da tarefa).
+export const IDS_CAMPOS_COMPORTAMENTO: string[] = [
+	ID_RECORRENCIA_ACAO,
+	ID_ANTECEDENCIA_ACAO,
+	ID_MANTER_HISTORICO_ACAO,
+];
+
+// Opções de "avisar com antecedência" oferecidas na captura. Antecedência é um número livre de dias no
+// modal de editar tarefa; na captura vira uma lista curta, porque o gesto ali é escolher rápido, não
+// digitar. Quem precisa de 5 dias ajusta depois na tarefa.
+export const OPCOES_ANTECEDENCIA_CAPTURA: { valor: string; rotulo: string }[] = [
+	{ valor: "1", rotulo: "1 dia antes" },
+	{ valor: "2", rotulo: "2 dias antes" },
+	{ valor: "3", rotulo: "3 dias antes" },
+	{ valor: "7", rotulo: "7 dias antes" },
+];
+
+// "manter registro ao concluir" é booleano; na captura ele é uma escolha entre dois rótulos.
+export const OPCOES_MANTER_HISTORICO_CAPTURA: { valor: string; rotulo: string }[] = [
+	{ valor: "sim", rotulo: "Manter no histórico" },
+	{ valor: "nao", rotulo: "Não manter" },
+];
+
 export type OperadorFiltro =
 	| "igual" // valor está entre os selecionados (comportamento de sempre)
 	| "diferente" // valor NÃO está entre os selecionados
@@ -197,6 +229,10 @@ export interface PropriedadeDefinida {
 	// Só para tipo "link_arquivo": lista fixa de caminhos disponíveis para escolher (dropdown rápido,
 	// sem precisar buscar). Vazia/ausente = busca livre em todo o vault (comportamento de sempre).
 	arquivosFixos?: string[];
+	// Só para tipo "link_arquivo": nos botões/pastilhas da captura, mostrar o primeiro `aliases` da nota
+	// em vez do nome do arquivo. Ausente/false = nome do arquivo (comportamento de sempre). Nota sem
+	// alias cai no nome do arquivo de qualquer jeito. Muda só o RÓTULO — o valor gravado é o link.
+	exibirAliasNaCaptura?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -370,6 +406,11 @@ export interface ConfigCaptura {
 	// primeira versão gravou a lista vazia em todo mundo → semeia) de "ela desmarcou todos de
 	// propósito" (respeita). Sem ele, os campos ressuscitariam a cada carga do plugin.
 	camposSemeados?: boolean;
+	// Status com que toda tarefa capturada nasce, quando NADA foi escolhido na tela (nem campo, nem
+	// preset, nem statusFixo do bloco do Inbox). Ausente/vazio = a regra posicional de sempre: com
+	// prazo cai na primeira opção "com data", sem prazo cai no Inbox. Um valor que não existe mais na
+	// lista de status é ignorado (volta à regra posicional) — ver statusInicialDaCaptura.
+	statusPadrao?: string | null;
 }
 
 export const CONFIG_CAPTURA_PADRAO: ConfigCaptura = {
@@ -586,6 +627,9 @@ export interface ConfigEfetivaGrupo {
 	// Aplicados sempre que a respectiva view abre pela primeira vez (sidebar ou aba) — não afeta
 	// Visualizações salvas nem o "filtro móvel" de embeds, que já têm seus próprios mecanismos.
 	agrupamentoPadraoKanban: TipoAgrupamento;
+	// Seções dentro de cada coluna do Kanban ao abrir. "nenhum" = coluna corrida, como sempre. Só o
+	// Kanban tem subagrupamento (a Lista já agrupa em um nível só).
+	subagrupamentoPadraoKanban: TipoAgrupamento;
 	agrupamentoPadraoLista: TipoAgrupamento;
 	filtroPadraoCalendarioId: string | null;
 	filtroPadraoKanbanId: string | null;
@@ -721,6 +765,7 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	visualizacoesSalvas: [],
 	filtrosSalvos: [],
 	agrupamentoPadraoKanban: ID_STATUS,
+	subagrupamentoPadraoKanban: "nenhum",
 	agrupamentoPadraoLista: "nenhum",
 	filtroPadraoCalendarioId: null,
 	filtroPadraoKanbanId: null,
@@ -833,6 +878,7 @@ export function migrarReferenciasPropriedade(grupo: GrupoTarefas, idAntigo: stri
 	}
 
 	if (grupo.agrupamentoPadraoKanban === idAntigo) grupo.agrupamentoPadraoKanban = idNovo;
+	if (grupo.subagrupamentoPadraoKanban === idAntigo) grupo.subagrupamentoPadraoKanban = idNovo;
 	if (grupo.agrupamentoPadraoLista === idAntigo) grupo.agrupamentoPadraoLista = idNovo;
 
 	for (const estilo of Object.keys(grupo.destaques) as EstiloDestaque[]) {
@@ -880,6 +926,15 @@ export function primeiraOpcaoStatus(status: ConfigStatus): string | undefined {
 // Primeira opção "com data" (logo após o Inbox fixo) — usada sempre que uma tarefa nasce/é regravada já com data.
 export function opcaoStatusComData(status: ConfigStatus): string | undefined {
 	return status.opcoes[1]?.valor ?? status.opcoes[0]?.valor;
+}
+
+// Status com que uma tarefa capturada nasce quando NADA foi escolhido na tela. O "Status inicial das
+// capturas" (Configurações → Captura) vence; sem ele — ou apontando pra uma opção que foi renomeada/
+// apagada — cai na regra posicional de sempre, que é o comportamento anterior byte a byte.
+export function statusInicialDaCaptura(config: ConfigEfetivaGrupo, temData: boolean): string {
+	const padrao = config.captura?.statusPadrao;
+	if (padrao && config.status.opcoes.some((o) => o.valor === padrao)) return padrao;
+	return (temData ? opcaoStatusComData(config.status) : primeiraOpcaoStatus(config.status)) ?? "";
 }
 
 // Regra posicional (mesmo padrão de ultimaOpcaoStatus = "concluído"): Inbox é sempre a primeira opção de Status.

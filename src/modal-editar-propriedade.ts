@@ -1,5 +1,14 @@
 import { App, Modal, Notice, Setting } from "obsidian";
-import { OpcaoSelecao, PropriedadeDefinida, TipoPropriedade } from "./tipos";
+import {
+	ID_ANTECEDENCIA_ACAO,
+	ID_DATA_ACAO,
+	ID_MANTER_HISTORICO_ACAO,
+	ID_RECORRENCIA_ACAO,
+	ID_STATUS,
+	OpcaoSelecao,
+	PropriedadeDefinida,
+	TipoPropriedade,
+} from "./tipos";
 import { ListaOpcoesGerenciada } from "./lista-opcoes-gerenciada";
 import { ListaArquivosGerenciada } from "./lista-arquivos-gerenciada";
 import { RepositorioTarefas } from "./repositorio-tarefas";
@@ -11,6 +20,19 @@ const ROTULOS_TIPO: Record<TipoPropriedade, string> = {
 	link_arquivo: "Link para arquivo",
 	lista: "Lista de tags (várias por tarefa)",
 };
+
+// Chaves que já pertencem aos campos fixos da tarefa (status, prazo e os três de comportamento). Uma
+// propriedade customizada com um destes ids colidiria com o campo fixo de mesmo nome na captura e nos
+// botões de ação — ver definicoesDeCampo em area-captura.ts, onde o campo fixo é testado primeiro.
+const ROTULOS_RESERVADOS: Record<string, string> = {
+	[ID_STATUS]: "status da tarefa",
+	[ID_DATA_ACAO]: "prazo",
+	[ID_RECORRENCIA_ACAO]: "recorrência",
+	[ID_ANTECEDENCIA_ACAO]: "avisar com antecedência",
+	[ID_MANTER_HISTORICO_ACAO]: "manter no histórico",
+};
+
+const IDS_RESERVADOS = Object.keys(ROTULOS_RESERVADOS);
 
 function gerarId(rotulo: string): string {
 	return rotulo
@@ -27,6 +49,7 @@ export class ModalEditarPropriedade extends Modal {
 	private tipo: TipoPropriedade;
 	private opcoes: OpcaoSelecao[];
 	private arquivosFixos: string[];
+	private exibirAliasNaCaptura: boolean;
 	private chave: string;
 
 	constructor(
@@ -42,6 +65,7 @@ export class ModalEditarPropriedade extends Modal {
 		this.tipo = propriedadeExistente?.tipo ?? "texto";
 		this.opcoes = (propriedadeExistente?.opcoes ?? []).map((o) => ({ ...o }));
 		this.arquivosFixos = [...(propriedadeExistente?.arquivosFixos ?? [])];
+		this.exibirAliasNaCaptura = propriedadeExistente?.exibirAliasNaCaptura ?? false;
 		this.chave = propriedadeExistente?.id ?? "";
 	}
 
@@ -99,6 +123,17 @@ export class ModalEditarPropriedade extends Modal {
 		new ListaArquivosGerenciada(this.app, containerArquivos, this.arquivosFixos, {
 			aoMudar: (caminhos) => (this.arquivosFixos = caminhos),
 		});
+
+		// Rótulo dos botões da captura. Nota sem alias continua aparecendo pelo nome do arquivo — o
+		// aviso está na descrição pra não parecer bug quando uma das notas destoar das outras.
+		new Setting(divArquivosFixos)
+			.setName("Mostrar o alias nos botões de captura")
+			.setDesc(
+				"Nos botões e pastilhas da captura rápida, exibe o primeiro alias da nota em vez do nome do arquivo (ex.: \"pamela\" no lugar de \"cliente - pamela\"). Notas sem alias continuam aparecendo pelo nome. Muda só o que é exibido — o link gravado na tarefa é o mesmo."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.exibirAliasNaCaptura).onChange((valor) => (this.exibirAliasNaCaptura = valor))
+			);
 		divArquivosFixos.toggle(this.tipo === "link_arquivo");
 
 		new Setting(contentEl).setClass("mytasks-modal-acao").addButton((btn) =>
@@ -111,6 +146,16 @@ export class ModalEditarPropriedade extends Modal {
 						? gerarId(this.chave) || this.propriedadeExistente.id
 						: gerarId(this.rotulo);
 					if (!id) return;
+
+					// Ids que a captura e os botões de ação já usam pros campos fixos da tarefa. Uma
+					// propriedade com um deles ficaria invisível na captura (o campo fixo vence a busca
+					// por propriedade) e mandaria valor pra chave errada no frontmatter.
+					if (IDS_RESERVADOS.includes(id) && id !== this.propriedadeExistente?.id) {
+						new Notice(
+							`"${id}" é uma chave reservada do plugin (${ROTULOS_RESERVADOS[id]}). Escolha outro nome para a propriedade.`
+						);
+						return;
+					}
 
 					const idAntigo = this.propriedadeExistente?.id;
 					if (idAntigo && id !== idAntigo) {
@@ -134,6 +179,8 @@ export class ModalEditarPropriedade extends Modal {
 						ordem: this.propriedadeExistente?.ordem ?? this.proximaOrdem,
 						opcoes: this.tipo === "selecao" ? this.opcoes.filter((o) => o.valor.trim()) : undefined,
 						arquivosFixos: this.tipo === "link_arquivo" && this.arquivosFixos.length > 0 ? this.arquivosFixos : undefined,
+						exibirAliasNaCaptura:
+							this.tipo === "link_arquivo" && this.exibirAliasNaCaptura ? true : undefined,
 					});
 					this.close();
 				})

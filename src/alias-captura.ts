@@ -34,6 +34,18 @@ function normalizar(texto: string): string {
 		.trim();
 }
 
+// Como uma nota de "Arquivos fixos" deve APARECER nos botões da captura, dado o caminho salvo na
+// propriedade. Com `preferirAlias`, o primeiro `aliases` da nota ganha do nome do arquivo — é a opção
+// "Mostrar o alias nos botões de captura". Sem alias (ou com a opção desligada) devolve o basename,
+// e o caminho cru vira o rótulo se a nota tiver sido apagada/movida.
+export function rotuloDeArquivoNaCaptura(app: App, caminho: string, preferirAlias: boolean): string {
+	const nome = caminho.split("/").pop()?.replace(/\.md$/, "") ?? caminho;
+	if (!preferirAlias) return nome;
+	const arquivo = app.vault.getAbstractFileByPath(caminho);
+	if (!(arquivo instanceof TFile)) return nome;
+	return aliasesDaNota(app, arquivo)[0]?.trim() || nome;
+}
+
 function aliasesDaNota(app: App, arquivo: TFile): string[] {
 	const bruto = app.metadataCache.getFileCache(arquivo)?.frontmatter?.aliases;
 	if (Array.isArray(bruto)) return bruto.filter((v): v is string => typeof v === "string");

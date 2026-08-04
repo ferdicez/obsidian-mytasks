@@ -11,6 +11,7 @@ import {
 	idsTemplateNotaTodos,
 	opcaoStatusComData,
 	primeiraOpcaoStatus,
+	statusInicialDaCaptura,
 	ultimaOpcaoStatus,
 } from "./tipos";
 import { DadosTarefaEscrita, escreverFrontmatter, formatarLinkArquivo, lerFrontmatter } from "./frontmatter-tarefas";
@@ -279,7 +280,16 @@ export class RepositorioTarefas {
 	// captura simples de sempre: Inbox, sem data, só o que o sufixo de alias herdar.
 	async criarTarefaRapida(
 		titulo: string,
-		valores?: { status?: string | null; data?: string | null; propriedades?: Record<string, PropriedadeValor> }
+		valores?: {
+			status?: string | null;
+			data?: string | null;
+			propriedades?: Record<string, PropriedadeValor>;
+			// Os três campos de comportamento, quando a captura os oferece (ver IDS_CAMPOS_COMPORTAMENTO).
+			// Ausente = o padrão de sempre: sem recorrência, sem antecedência, histórico pela nota modelo.
+			recorrencia?: Recorrencia | null;
+			diasAntecedenciaAviso?: number | null;
+			manterHistorico?: boolean | null;
+		}
 	): Promise<TFile> {
 		const config = this.obterConfiguracoes();
 
@@ -314,23 +324,23 @@ export class RepositorioTarefas {
 		}
 
 		const data = valores?.data ?? null;
-		// Sem status escolhido na captura, a regra posicional de sempre: com data, a primeira opção "com
-		// data"; sem data, o Inbox. Antes disso a captura caía SEMPRE no Inbox — o que deixaria uma tarefa
-		// capturada com prazo parada na caixa de entrada, longe das views que ela usa pra trabalhar.
-		const status =
-			valores?.status ||
-			(data ? opcaoStatusComData(config.status) ?? "" : primeiraOpcaoStatus(config.status) ?? "");
+		// Sem status escolhido na captura, vale o "Status inicial das capturas" configurado; sem ele, a
+		// regra posicional de sempre: com data, a primeira opção "com data"; sem data, o Inbox. Antes disso
+		// a captura caía SEMPRE no Inbox — o que deixaria uma tarefa capturada com prazo parada na caixa de
+		// entrada, longe das views que ela usa pra trabalhar.
+		const status = valores?.status || statusInicialDaCaptura(config, data !== null);
 		const noInbox = status === (primeiraOpcaoStatus(config.status) ?? "");
 
 		const arquivo = await this.criarTarefa(titulo, {
 			status,
 			data,
 			horario: null,
-			recorrencia: "nenhuma",
-			// A nota modelo consultada é a do Inbox só quando a tarefa de fato nasce lá.
-			manterHistorico: await this.manterHistoricoInicial(config, noInbox),
+			recorrencia: valores?.recorrencia ?? "nenhuma",
+			// Escolha explícita na captura vence a nota modelo; sem ela, a modelo decide como sempre (e a
+			// consultada é a do Inbox só quando a tarefa de fato nasce lá).
+			manterHistorico: valores?.manterHistorico ?? (await this.manterHistoricoInicial(config, noInbox)),
 			recorrenciaDataFim: null,
-			diasAntecedenciaAviso: null,
+			diasAntecedenciaAviso: valores?.diasAntecedenciaAviso ?? null,
 			propriedades,
 		});
 
