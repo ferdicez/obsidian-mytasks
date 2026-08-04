@@ -106,20 +106,6 @@ export class AreaCaptura {
 			void this.capturar();
 		});
 
-		// Botão de adicionar no canto direito do campo. Só aqui, no bloco de demandas: o Inbox continua
-		// só com Enter (é outro caminho de código — MotorLista.desenharCapturaRapida). `mousedown` com
-		// preventDefault em vez de `click` porque o clique tira o foco do input antes de disparar, e um
-		// campo de valor em edição (busca de arquivo, texto livre) fecharia sem ter gravado.
-		const botaoAdicionar = linhaInput.createEl("button", {
-			cls: "mytasks-captura-adicionar",
-			attr: { "aria-label": "Adicionar tarefa" },
-		});
-		setIcon(botaoAdicionar, "plus");
-		botaoAdicionar.addEventListener("mousedown", (evento) => {
-			evento.preventDefault();
-			void this.capturar();
-		});
-
 		if (this.opcoes.mostrarCampos === false) return;
 
 		this.areaCampos = this.containerEl.createDiv({ cls: "mytasks-captura-campos" });
@@ -130,6 +116,12 @@ export class AreaCaptura {
 			const linhaPresets = this.containerEl.createDiv({ cls: "mytasks-captura-presets" });
 			for (const preset of presets) this.desenharPreset(linhaPresets, preset);
 		}
+	}
+
+	// Dispara a captura de fora — usado pelo botão "+" que a view desenha na linha do toggle (a
+	// pastilha "demandas" não faz parte desta área, mora no cabeçalho da view).
+	capturarAgora(): void {
+		void this.capturar();
 	}
 
 	// Foca o campo de título — usado pelo comando "Capturar tarefa" da paleta.

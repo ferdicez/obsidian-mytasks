@@ -153,6 +153,35 @@ export class VistaLista extends ItemView {
 			this.modo = "demandas";
 			this.renderizar();
 		});
+
+		// Botão "+" no canto direito da MESMA linha das pastilhas, só no modo demandas — no Inbox o
+		// Enter continua sendo o único caminho, como ela pediu. `mousedown` com preventDefault em vez
+		// de `click`: o clique tira o foco do input antes de disparar, e um campo de valor em edição
+		// (busca de arquivo, texto livre) fecharia pelo blur sem ter gravado.
+		//
+		// É uma DIV com role="button", não um <button>: o tema estiliza `button` na sidebar com regras
+		// que venciam tudo aqui — o botão saía cinza, sem ícone e com altura própria, e nem !important
+		// resolvia de forma confiável. Numa div não existe essa disputa. O toggle ao lado escapa porque
+		// os botões dele estão sob `.mytasks-toggle-inbox button`, seletor mais específico.
+		//
+		// O "+" é TEXTO, não `setIcon`: o svg do Lucide saiu invisível aqui pelo mesmo motivo.
+		if (this.modo === "demandas") {
+			const botaoAdicionar = linha.createDiv({
+				cls: "mytasks-captura-adicionar",
+				text: "+",
+				attr: { role: "button", tabindex: "0", "aria-label": "Adicionar tarefa" },
+			});
+			botaoAdicionar.addEventListener("mousedown", (evento) => {
+				evento.preventDefault();
+				this.captura?.capturarAgora();
+			});
+			// Uma div com role="button" não dispara por teclado sozinha, diferente de um <button>.
+			botaoAdicionar.addEventListener("keydown", (evento) => {
+				if (evento.key !== "Enter" && evento.key !== " ") return;
+				evento.preventDefault();
+				this.captura?.capturarAgora();
+			});
+		}
 	}
 
 	private arquivoRelevante(caminho: string): boolean {

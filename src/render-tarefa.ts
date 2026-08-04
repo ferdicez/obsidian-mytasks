@@ -115,17 +115,13 @@ export function desenharCartaoTarefa(
 	// qualquer outro, porque ali a tarefa já é trabalho de hoje; quem avisa é o lembrete dos dias antes.
 	// Com o dia do prazo liberado, o fundo volta a ser território do destaque de propriedade ("linha"),
 	// que só cede a vez enquanto o lembrete está pintando.
-	//
-	// O destaque de propriedade NÃO pinta o item inteiro: a cor passaria por baixo do checkbox e
-	// engoliria a bolinha de marcar. Ela é guardada numa variável e o CSS a aplica só a partir do
-	// conteúdo (.mytasks-info), deixando a coluna do checkbox com o fundo do tema.
 	if (fase === "antecedencia") {
 		item.addClass("mytasks-item-aviso");
 		item.addClass("mytasks-item-antecedencia");
 		item.style.backgroundColor = corComOpacidade(configuracoes.corAviso, 0.07);
 	} else if (corFundo) {
 		item.addClass("mytasks-item-fundo-destaque");
-		item.style.setProperty("--mytasks-cor-fundo", corComOpacidade(corFundo, 0.28));
+		item.style.backgroundColor = corComOpacidade(corFundo, 0.28);
 	}
 
 	if (mostrarCheckbox) {
