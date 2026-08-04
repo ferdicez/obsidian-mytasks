@@ -227,19 +227,48 @@
 	gap: 4px;
 }
 
-/* Uma linha por campo: com a apresentação em "botões", as opções de um campo precisam ficar juntas e
-   separadas das do campo seguinte — senão status e etiqueta viram uma sopa de pastilhas sem dizer
-   qual é de quê. */
+/* Um bloco por campo (nome em cima, controles embaixo): com a apresentação em "botões", as opções de
+   um campo precisam ficar juntas e separadas das do campo seguinte — senão status e etiqueta viram
+   uma sopa de pastilhas sem dizer qual é de quê. */
 .mytasks-captura-campos {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 10px;
+}
+
+.mytasks-captura-campo-bloco {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+/* Nome da propriedade acima dos controles. Discreto de propósito: é uma etiqueta de apoio, quem
+   comanda a leitura são as pastilhas embaixo. */
+.mytasks-captura-campo-rotulo {
+	font-size: 0.72em;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	color: var(--text-faint);
 }
 
 .mytasks-captura-linha-campo {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 4px;
+}
+
+/* A seta da pastilha de menu suspenso. */
+.mytasks-captura-campo .mytasks-seletor-discreto-chevron {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 2px;
+	opacity: 0.6;
+}
+
+.mytasks-captura-campo .mytasks-seletor-discreto-chevron svg {
+	width: 11px;
+	height: 11px;
 }
 
 /* !important porque esta classe também esconde o CORPO de um acordeão na aba de Configurações,

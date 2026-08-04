@@ -181,11 +181,16 @@ export class AreaCaptura {
 		}
 		this.areaCampos.removeClass("mytasks-oculto");
 
-		// Cada campo ganha a própria LINHA: com "botões" as opções de um campo precisam ficar juntas e
-		// separadas das do campo seguinte, senão status e etiqueta viram uma sopa de pastilhas sem
-		// dizer qual é de quê. Com "menu" a linha tem uma pastilha só.
+		// Cada campo ganha o próprio BLOCO: o nome da propriedade em cima e os controles embaixo, nas
+		// duas apresentações. Com "botões", sem o nome as opções de status e de etiqueta viravam uma
+		// sopa de pastilhas sem dizer qual é de quê; com "menu", o nome some da pastilha assim que um
+		// valor é escolhido (a pastilha passa a mostrar o valor), e aí não sobrava nada dizendo de que
+		// campo aquilo é.
 		for (const campo of campos) {
-			const linha = this.areaCampos.createDiv({ cls: "mytasks-captura-linha-campo" });
+			const bloco = this.areaCampos.createDiv({ cls: "mytasks-captura-campo-bloco" });
+			bloco.createDiv({ cls: "mytasks-captura-campo-rotulo", text: campo.rotulo.toLowerCase() });
+
+			const linha = bloco.createDiv({ cls: "mytasks-captura-linha-campo" });
 			const opcoes = campo.apresentacao === "botoes" ? this.opcoesDoCampo(campo) : null;
 			if (opcoes) this.desenharCampoComoBotoes(linha, campo, opcoes);
 			else this.desenharCampo(linha, campo);
@@ -258,10 +263,17 @@ export class AreaCaptura {
 			attr: { "aria-label": campo.rotulo },
 		});
 		botao.toggleClass("mytasks-captura-campo-preenchido", temValor);
+		// Sem valor mostra "escolher", não o nome do campo: o nome já está no rótulo acima da linha,
+		// e repeti-lo dentro da pastilha diria a mesma coisa duas vezes.
 		botao.createSpan({
 			cls: "mytasks-seletor-discreto-texto",
-			text: temValor ? this.rotuloDoValor(campo, valorAtual) : campo.rotulo.toLowerCase(),
+			text: temValor ? this.rotuloDoValor(campo, valorAtual) : "escolher",
 		});
+
+		// Seta pra baixo: é o que diz que a pastilha ABRE uma lista, em vez de ser um botão que já
+		// marca um valor (como os da apresentação em botões, na linha ao lado).
+		const chevron = botao.createSpan({ cls: "mytasks-seletor-discreto-chevron" });
+		setIcon(chevron, "chevron-down");
 
 		botao.addEventListener("click", (evento) => this.abrirEditorDeCampo(evento, campo));
 	}
@@ -297,6 +309,22 @@ export class AreaCaptura {
 		this.abrirEntradaDeTexto(campo);
 	}
 
+	// Abre o menu colado na BORDA INFERIOR ESQUERDA da pastilha clicada, e não no ponto do cursor
+	// (`showAtMouseEvent`): clicando na direita da pastilha o menu descia deslocado, sem relação
+	// visível com o controle que o abriu. Mesmo critério dos seletores do cabeçalho das views.
+	private abrirMenuSobOControle(menu: Menu, evento: MouseEvent): void {
+		const alvo = (evento.currentTarget ?? evento.target) as HTMLElement | null;
+		if (!alvo) {
+			menu.showAtMouseEvent(evento);
+			return;
+		}
+		// `currentTarget` é o <button>; o clique pode ter caído num <span> dentro dele, então subir
+		// até a pastilha garante o retângulo certo mesmo quando o listener é herdado.
+		const pastilha = alvo.closest("button") ?? alvo;
+		const retangulo = pastilha.getBoundingClientRect();
+		menu.showAtPosition({ x: retangulo.left, y: retangulo.bottom + 4 });
+	}
+
 	private abrirMenuDeOpcoes(
 		evento: MouseEvent,
 		campoId: string,
@@ -327,7 +355,7 @@ export class AreaCaptura {
 			);
 		}
 
-		menu.showAtMouseEvent(evento);
+		this.abrirMenuSobOControle(menu, evento);
 	}
 
 	private abrirMenuData(evento: MouseEvent, campoId: string): void {
@@ -363,7 +391,7 @@ export class AreaCaptura {
 				})
 		);
 
-		menu.showAtMouseEvent(evento);
+		this.abrirMenuSobOControle(menu, evento);
 	}
 
 	// Input nativo de data, mostrado no lugar da barra de campos até ela escolher. Usa showPicker()
