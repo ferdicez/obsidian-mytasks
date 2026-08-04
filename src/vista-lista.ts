@@ -89,14 +89,15 @@ export class VistaLista extends ItemView {
 		const configEfetiva = configDoGrupo(this.plugin.configuracoes, grupo);
 		const repositorio = this.plugin.repositorioDoGrupo(grupo.id);
 
-		this.desenharToggle(container, grupo);
-
+		// O toggle vive DENTRO do mesmo container do conteúdo, e não solto acima dele: é
+		// `.mytasks-container` que carrega o padding lateral da sidebar (8px 12px). Com o toggle fora,
+		// ele encostava na borda enquanto a lista respirava — o desalinhamento que ela viu.
 		if (this.modo === "inbox") {
 			this.captura = null;
 			// O MotorLista desenha o próprio toggle quando `mostrarToggleInbox` está ligado — aqui ele
-			// fica DESLIGADO, porque o toggle acima é da view (ele alterna inbox/demandas, não
-			// inbox/tarefas). `filtroInbox` prende o motor à caixa de entrada.
-			this.motor = new MotorLista(container.createDiv(), {
+			// fica DESLIGADO, porque o toggle é da view (alterna inbox/demandas, não inbox/tarefas).
+			// `modoInicial` prende o motor à caixa de entrada.
+			this.motor = new MotorLista(container, {
 				app: this.app,
 				repositorio,
 				configuracoes: configEfetiva,
@@ -104,12 +105,21 @@ export class VistaLista extends ItemView {
 				permitirTrocaAgrupamento: false,
 				permitirEdicaoFiltro: false,
 				filtro: (t) => tarefaPertenceAoGrupo(t, grupo, this.plugin.configuracoes),
+				// Desenhado pelo motor no lugar do toggle antigo, na PRIMEIRA linha do cabeçalho —
+				// assim o espaçamento é exatamente o de antes, em vez de uma linha extra por fora.
+				aoDesenharCabecalho: (cabecalho) => this.desenharToggle(cabecalho, grupo),
 			});
 			this.motor.renderizar();
 			return;
 		}
 
+		// Mesma árvore que o MotorLista monta no modo Inbox, pros dois ficarem idênticos: o container
+		// com o padding da sidebar, o toggle numa linha `.mytasks-cabecalho`, e o campo de captura
+		// numa SEGUNDA linha `.mytasks-cabecalho` (é ela que dá a altura e a largura do input lá).
 		this.motor = null;
+		container.addClass("mytasks-container");
+		this.desenharToggle(container.createDiv({ cls: "mytasks-cabecalho" }), grupo);
+
 		this.captura = new AreaCaptura(container.createDiv({ cls: "mytasks-sidebar-captura" }), {
 			app: this.app,
 			repositorio,
@@ -121,10 +131,10 @@ export class VistaLista extends ItemView {
 		this.captura.renderizar();
 	}
 
-	// As duas pastilhas do topo. Mesma casca visual do toggle antigo do MotorLista, pra não mudar a
-	// aparência que ela já conhece — o que mudou é o que a segunda aba mostra.
-	private desenharToggle(container: HTMLElement, grupo: GrupoTarefas): void {
-		const linha = container.createDiv({ cls: "mytasks-cabecalho" });
+	// As duas pastilhas do topo, desenhadas DENTRO da linha de cabeçalho que o motor (ou a área de
+	// captura) já cria — mesma casca visual do toggle antigo do MotorLista, pra não mudar a aparência
+	// que ela já conhece. O que mudou é o que a segunda aba mostra.
+	private desenharToggle(linha: HTMLElement, grupo: GrupoTarefas): void {
 		const toggle = linha.createDiv({ cls: "mytasks-toggle-inbox" });
 
 		const botaoInbox = toggle.createEl("button", { attr: { "aria-label": "Inbox" } });

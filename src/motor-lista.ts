@@ -45,6 +45,10 @@ export interface OpcoesMotorLista {
 	// Restringe o SeletorFiltroSalvo do cabeçalho a só estes IDs (usado no embed, "filtro móvel" da visualização).
 	// Sem isso, o seletor mostra todos os Filtros salvos (comportamento da Lista/Kanban geral).
 	filtrosExtrasIds?: string[];
+	// Chamado com a linha de cabeçalho recém-criada, ANTES dos controles do motor. A sidebar usa isso
+	// pra pôr o próprio toggle (inbox/demandas) exatamente onde ficava o toggle interno — mantendo o
+	// espaçamento de sempre, em vez de uma linha extra desenhada por fora do container.
+	aoDesenharCabecalho?: (cabecalho: HTMLElement) => void;
 }
 
 export class MotorLista {
@@ -195,6 +199,9 @@ export class MotorLista {
 	private desenharCabecalho(): void {
 		const cabecalho = this.containerEl.createDiv({ cls: "mytasks-cabecalho" });
 		if (this.opcoes.alinharControlesADireita) cabecalho.addClass("mytasks-cabecalho-a-direita");
+
+		// Antes dos controles do motor: quem injeta aqui (a sidebar) ocupa o lugar do toggle interno.
+		this.opcoes.aoDesenharCabecalho?.(cabecalho);
 
 		if (this.opcoes.mostrarToggleInbox) {
 			const toggle = cabecalho.createDiv({ cls: "mytasks-toggle-inbox" });

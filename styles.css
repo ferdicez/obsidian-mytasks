@@ -148,18 +148,27 @@
 	height: 14px;
 }
 
+/* Altura fixa (e não a do tema) porque o MESMO input aparece em dois contextos: dentro de
+   `.mytasks-cabecalho` no Inbox e dentro de `.mytasks-captura-linha` na aba de demandas. Só o
+   primeiro define --mytasks-altura-controle, então sem fixar aqui os dois campos saíam com alturas
+   diferentes — a caixa de demandas ficava visivelmente mais baixa que a do Inbox. */
 .mytasks-captura-rapida {
 	flex: 1;
 	min-width: 120px;
+	height: 30px;
+	padding: 0 10px;
+	line-height: normal;
+	font-size: var(--font-ui-small);
 }
 
 /* ---------- Área de captura da barra lateral ---------- */
 
-/* A aba "demandas" da sidebar: só a área de captura, sem lista embaixo. */
+/* A aba "demandas" da sidebar: só a área de captura, sem lista embaixo. Sem `gap` de propósito —
+   o espaçamento vem do `margin-bottom` do `.mytasks-cabecalho` do input, igual ao do Inbox; somar
+   os dois afastaria as pastilhas do campo. */
 .mytasks-sidebar-captura {
 	display: flex;
 	flex-direction: column;
-	gap: 18px;
 }
 
 /* Com o toggle da view assumindo a troca inbox/demandas, o MotorLista desenha um cabeçalho vazio
@@ -168,11 +177,17 @@
 	display: none;
 }
 
-/* Cada bloco na ordem do print: título → campo → pastilhas → presets. */
+/* Cada bloco na ordem do print: campo → pastilhas → presets. Sem `gap`: a linha do campo é um
+   `.mytasks-cabecalho` e já traz a própria margem embaixo (a mesma do Inbox); o respiro entre as
+   pastilhas e os presets vem das regras de cada um. */
 .mytasks-area-captura {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+}
+
+/* Espaço entre a fileira de campos e a de presets, que antes vinha do `gap` do bloco. */
+.mytasks-area-captura .mytasks-captura-presets {
+	margin-top: 8px;
 }
 
 /* A pastilha de título ("inbox" com ícone, "demandas"): mesma casca do toggle que existia antes,
@@ -200,8 +215,10 @@
 	height: 14px;
 }
 
+/* Mesma altura de linha que o cabeçalho do Inbox, pros dois campos ficarem idênticos. */
 .mytasks-captura-linha {
 	display: flex;
+	align-items: center;
 }
 
 .mytasks-captura-presets {

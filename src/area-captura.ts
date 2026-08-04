@@ -81,7 +81,10 @@ export class AreaCaptura {
 			if (this.opcoes.titulo) cabecalho.createSpan({ text: this.opcoes.titulo });
 		}
 
-		const linhaInput = this.containerEl.createDiv({ cls: "mytasks-captura-linha" });
+		// `.mytasks-cabecalho` é o que dá ao input a mesma altura, largura e margem que ele tem no
+		// Inbox (é a linha em que o MotorLista o desenha). Sem ela, o mesmo campo saía mais baixo e
+		// mais largo nesta aba do que na outra.
+		const linhaInput = this.containerEl.createDiv({ cls: "mytasks-cabecalho mytasks-captura-linha" });
 		this.input = linhaInput.createEl("input", {
 			type: "text",
 			placeholder: this.opcoes.placeholder ?? "Adicionar tarefa...",
