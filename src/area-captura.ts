@@ -9,7 +9,6 @@ import {
 	ID_RECORRENCIA_ACAO,
 	ID_STATUS,
 	IDS_CAMPOS_COMPORTAMENTO,
-	OPCOES_ANTECEDENCIA_CAPTURA,
 	OPCOES_MANTER_HISTORICO_CAPTURA,
 	PresetCaptura,
 	PropriedadeDefinida,
@@ -190,7 +189,7 @@ export class AreaCaptura {
 				.map((r) => ({ valor: r, rotulo: RECORRENCIA_LABELS[r] }));
 		}
 
-		if (campo.id === ID_ANTECEDENCIA_ACAO) return OPCOES_ANTECEDENCIA_CAPTURA;
+		// Antecedência não passa por aqui: é campo numérico, tratado antes de escolher a apresentação.
 		if (campo.id === ID_MANTER_HISTORICO_ACAO) return OPCOES_MANTER_HISTORICO_CAPTURA;
 
 		if (campo.def?.tipo === "selecao") {
@@ -236,6 +235,14 @@ export class AreaCaptura {
 			bloco.createDiv({ cls: "mytasks-captura-campo-rotulo", text: campo.rotulo.toLowerCase() });
 
 			const linha = bloco.createDiv({ cls: "mytasks-captura-linha-campo" });
+
+			// Antecedência é número de dias digitado, em qualquer apresentação: uma lista fechada de
+			// pastilhas (1, 2, 3, 7) não cobre 15 ou 30 dias, e ela pediu pra digitar.
+			if (campo.id === ID_ANTECEDENCIA_ACAO) {
+				this.desenharCampoNumerico(linha, campo);
+				continue;
+			}
+
 			const opcoes = campo.apresentacao === "botoes" ? this.opcoesDoCampo(campo) : null;
 			if (opcoes) this.desenharCampoComoBotoes(linha, campo, opcoes);
 			else this.desenharCampo(linha, campo);
@@ -251,7 +258,13 @@ export class AreaCaptura {
 	): void {
 		const ehPrazo = campo.id === ID_DATA_ACAO || campo.def?.tipo === "data";
 
-		for (const opcao of opcoes) {
+		// Quantos controles esta linha vai desenhar ao todo — no prazo entra o "escolher data" no fim.
+		// Serve pra saber qual é o ÚLTIMO e se ele fica sozinho na linha da grade (total ímpar), caso
+		// em que ele ocupa as duas colunas em vez de deixar um buraco à direita.
+		const total = opcoes.length + (ehPrazo ? 1 : 0);
+		const ultimoSozinho = total % 2 === 1;
+
+		opcoes.forEach((opcao, indice) => {
 			// No prazo o valor guardado é a DATA calculada, não o atalho: comparar "hoje" com
 			// "2026-08-04" nunca casaria, e o botão nunca acenderia.
 			const valorEfetivo = ehPrazo ? this.dataDoAtalho(opcao.valor) : opcao.valor;
@@ -261,6 +274,10 @@ export class AreaCaptura {
 				cls: "mytasks-captura-campo mytasks-seletor-discreto",
 				attr: { "aria-label": `${campo.rotulo}: ${opcao.rotulo}` },
 			});
+			// Só quando NÃO é prazo: ali o último da grade é o "escolher data", desenhado depois.
+			if (ultimoSozinho && !ehPrazo && indice === opcoes.length - 1) {
+				botao.addClass("mytasks-captura-campo-largo");
+			}
 			botao.toggleClass("mytasks-captura-campo-preenchido", marcado);
 			botao.createSpan({ cls: "mytasks-seletor-discreto-texto", text: opcao.rotulo });
 			botao.addEventListener("click", () => {
@@ -268,7 +285,7 @@ export class AreaCaptura {
 				else this.valores[campo.id] = valorEfetivo;
 				this.renderizarCampos();
 			});
-		}
+		});
 
 		// "escolher data" fecha a linha do prazo — é o terceiro item que ela pediu, e precisa de um
 		// seletor de verdade em vez de um valor fixo.
@@ -281,6 +298,8 @@ export class AreaCaptura {
 				cls: "mytasks-captura-campo mytasks-seletor-discreto",
 				attr: { "aria-label": `${campo.rotulo}: escolher data` },
 			});
+			// É o último da grade no prazo; com total ímpar (hoje/amanhã/escolher = 3) ocupa a linha.
+			if (ultimoSozinho) botao.addClass("mytasks-captura-campo-largo");
 			botao.toggleClass("mytasks-captura-campo-preenchido", temDataLivre);
 			botao.createSpan({
 				cls: "mytasks-seletor-discreto-texto",
@@ -288,6 +307,46 @@ export class AreaCaptura {
 			});
 			botao.addEventListener("click", () => this.abrirSeletorDeData(campo.id));
 		}
+	}
+
+	// Antecedência: um input de número dentro da casca de pastilha, ocupando a linha inteira. Grava
+	// direto em `valores` a cada digitação — não há botão de confirmar aqui, e re-renderizar a cada
+	// tecla tiraria o foco do campo no meio da digitação.
+	private desenharCampoNumerico(container: HTMLElement, campo: CampoDesenhavel): void {
+		const caixa = container.createDiv({
+			cls: "mytasks-captura-numero mytasks-captura-campo-largo",
+		});
+
+		const input = caixa.createEl("input", {
+			type: "number",
+			attr: { min: "0", max: "365", placeholder: "0", "aria-label": campo.rotulo },
+		});
+
+		const atual = this.valores[campo.id];
+		if (typeof atual === "string" || typeof atual === "number") input.value = String(atual);
+
+		caixa.createSpan({ cls: "mytasks-captura-numero-sufixo", text: "dias antes" });
+
+		input.addEventListener("input", () => {
+			const texto = input.value.trim();
+			// Campo vazio é "sem aviso antecipado" — apagar tem que LIMPAR o valor, não gravar 0 (que
+			// significaria avisar no próprio dia).
+			if (!texto) {
+				delete this.valores[campo.id];
+				return;
+			}
+			const dias = Number(texto);
+			if (!Number.isFinite(dias) || dias < 0) return;
+			this.valores[campo.id] = String(Math.floor(dias));
+		});
+
+		// Enter dentro do campo captura a tarefa, como no campo de título — senão ela teria que voltar
+		// ao título só pra confirmar.
+		input.addEventListener("keydown", (evento) => {
+			if (evento.key !== "Enter") return;
+			evento.preventDefault();
+			void this.capturar();
+		});
 	}
 
 	private dataDoAtalho(atalho: string): string {
@@ -304,7 +363,9 @@ export class AreaCaptura {
 		const temValor = valorAtual !== undefined && valorAtual !== null && valorAtual !== "";
 
 		const botao = container.createEl("button", {
-			cls: "mytasks-captura-campo mytasks-seletor-discreto",
+			// Pastilha única do campo: sozinha na grade, ocupa as duas colunas — com metade da largura
+			// sobraria um buraco à direita.
+			cls: "mytasks-captura-campo mytasks-seletor-discreto mytasks-captura-campo-largo",
 			attr: { "aria-label": campo.rotulo },
 		});
 		botao.toggleClass("mytasks-captura-campo-preenchido", temValor);

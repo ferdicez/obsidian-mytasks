@@ -81,15 +81,9 @@ export const IDS_CAMPOS_COMPORTAMENTO: string[] = [
 	ID_MANTER_HISTORICO_ACAO,
 ];
 
-// Opções de "avisar com antecedência" oferecidas na captura. Antecedência é um número livre de dias no
-// modal de editar tarefa; na captura vira uma lista curta, porque o gesto ali é escolher rápido, não
-// digitar. Quem precisa de 5 dias ajusta depois na tarefa.
-export const OPCOES_ANTECEDENCIA_CAPTURA: { valor: string; rotulo: string }[] = [
-	{ valor: "1", rotulo: "1 dia antes" },
-	{ valor: "2", rotulo: "2 dias antes" },
-	{ valor: "3", rotulo: "3 dias antes" },
-	{ valor: "7", rotulo: "7 dias antes" },
-];
+// A antecedência NÃO tem lista de opções na captura: é um número de dias digitado, como no modal de
+// editar tarefa (ver desenharCampoNumerico). Existiu aqui uma lista curta de pastilhas (1, 2, 3 e 7
+// dias) que não cobria 15 ou 30 — digitar cobre qualquer prazo e ainda tira quatro pastilhas da barra.
 
 // "manter registro ao concluir" é booleano; na captura ele é uma escolha entre dois rótulos.
 export const OPCOES_MANTER_HISTORICO_CAPTURA: { valor: string; rotulo: string }[] = [

@@ -267,35 +267,55 @@
 	gap: 4px;
 }
 
-/* Um bloco por campo (nome em cima, controles embaixo): com a apresentação em "botões", as opções de
-   um campo precisam ficar juntas e separadas das do campo seguinte — senão status e etiqueta viram
-   uma sopa de pastilhas sem dizer qual é de quê. */
+/* Um bloco por campo, em DUAS COLUNAS: nome à esquerda, controles à direita. O nome estava em cima
+   dos controles, e cada campo gastava duas linhas — com sete campos a barra virava uma parede. */
 .mytasks-captura-campos {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 9px;
 }
 
+/* Coluna do rótulo com largura FIXA: é o que faz "prazo" e "antecedência" começarem no mesmo lugar,
+   e os controles ao lado também. `minmax(0, 1fr)` na segunda coluna (e não `1fr` puro) porque o
+   mínimo automático do grid é o conteúdo — sem isso uma pastilha de texto longo estoura a coluna em
+   vez de encolher. */
 .mytasks-captura-campo-bloco {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
+	display: grid;
+	grid-template-columns: var(--mytasks-captura-rotulo-largura, 76px) minmax(0, 1fr);
+	gap: 8px;
+	align-items: start;
 }
 
-/* Nome da propriedade acima dos controles. Discreto de propósito: é uma etiqueta de apoio, quem
-   comanda a leitura são as pastilhas embaixo. */
+/* Nome da propriedade à esquerda dos controles. Discreto de propósito: é uma etiqueta de apoio, quem
+   comanda a leitura são as pastilhas ao lado. */
 .mytasks-captura-campo-rotulo {
 	font-size: 0.72em;
 	font-weight: 600;
 	letter-spacing: 0.03em;
 	text-transform: uppercase;
 	color: var(--text-faint);
+	/* Alinha o rótulo com a PRIMEIRA linha de controles, não com o topo da célula. */
+	line-height: var(--mytasks-altura-controle, 30px);
+	/* Nome que não couber é cortado em vez de empurrar a coluna — a largura tem que ser constante,
+	   senão o alinhamento entre campos se perde, que é o motivo de existir esta grade. */
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
+/* Controles SEMPRE em duas colunas iguais: as duas pastilhas de uma linha têm a mesma largura, e
+   essa largura é sempre metade do espaço disponível — elas esticam e encolhem junto com a sidebar,
+   em vez de cada uma ter a largura do próprio texto. */
 .mytasks-captura-linha-campo {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 4px;
+}
+
+/* Controle sozinho na última linha ocupa as duas colunas: com metade da largura sobraria um buraco
+   à direita. Vale para o campo com uma opção só (menu) e para o ímpar que fecha a lista. */
+.mytasks-captura-linha-campo > .mytasks-captura-campo-largo {
+	grid-column: 1 / -1;
 }
 
 /* A seta da pastilha de menu suspenso. */
@@ -328,17 +348,94 @@
 	cursor: pointer;
 }
 
+/* Dentro da grade a pastilha preenche a célula em vez de ter a largura do próprio texto — é o que
+   faz duas pastilhas vizinhas terminarem sempre iguais, com qualquer nome. `min-width: 0` porque o
+   mínimo automático de um item de grid é o conteúdo: sem ele, um texto longo empurra a coluna e as
+   duas deixam de ter a mesma largura. */
+.mytasks-captura-linha-campo > .mytasks-captura-campo {
+	width: 100%;
+	min-width: 0;
+	justify-content: center;
+}
+
+/* Pastilha de MENU: o texto à esquerda e a seta colada na direita, como um seletor de verdade. */
+.mytasks-captura-linha-campo > .mytasks-captura-campo:has(.mytasks-seletor-discreto-chevron) {
+	justify-content: space-between;
+}
+
 /* Campo com valor escolhido acende, pra ela ver num relance o que vai ser gravado antes do Enter. */
 .mytasks-captura-campo-preenchido {
 	background: var(--interactive-accent) !important;
 	color: var(--text-on-accent) !important;
 }
 
+/* Sem `max-width` fixo: dentro da grade quem manda na largura é a célula, e um teto em px cortaria
+   o texto cedo demais numa sidebar larga. `min-width: 0` pelo mesmo motivo do item acima. */
 .mytasks-captura-campo .mytasks-seletor-discreto-texto {
-	max-width: 120px;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* O chevron não encolhe quando o texto ao lado é longo — sem isso ele vira um traço espremido. */
+.mytasks-captura-campo .mytasks-seletor-discreto-chevron {
+	flex-shrink: 0;
+}
+
+/* Antecedência: número de dias digitado, não uma lista de pastilhas fixas. Veste a mesma casca das
+   pastilhas (fundo, raio, altura) pra não destoar da grade, com o sufixo "dias antes" fixo fora do
+   campo de digitar. */
+.mytasks-captura-numero {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 3px 8px;
+	border-radius: 6px;
+	background: var(--background-modifier-border);
+}
+
+.mytasks-captura-numero:focus-within {
+	box-shadow: 0 0 0 2px var(--interactive-accent) inset;
+}
+
+/* !important nos zeros: o tema estiliza `input` na sidebar com borda e padding próprios, que aqui
+   dariam uma segunda moldura dentro da casca da pastilha. */
+.mytasks-captura-numero input {
+	width: 3.2em;
+	flex-shrink: 0;
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	padding: 0 !important;
+	height: auto !important;
+	font-size: 0.78em;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-normal);
+	text-align: center;
+}
+
+/* As setinhas nativas do input[type=number] ficam minúsculas e desalinham a altura da linha. */
+.mytasks-captura-numero input::-webkit-outer-spin-button,
+.mytasks-captura-numero input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.mytasks-captura-numero input[type="number"] {
+	-moz-appearance: textfield;
+	appearance: textfield;
+}
+
+.mytasks-captura-numero-sufixo {
+	font-size: 0.78em;
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
 }
 
 .mytasks-captura-preset svg {

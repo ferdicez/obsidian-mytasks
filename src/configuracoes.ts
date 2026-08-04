@@ -1111,6 +1111,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 						await gravar(novos);
 					});
 				});
+			} else if (oferecido.id === ID_ANTECEDENCIA_ACAO) {
+				setting.setDesc("Número de dias digitado na captura. Em branco = sem aviso antecipado.");
 			} else {
 				setting.setDesc(
 					oferecido.tipo === "link_arquivo"
@@ -1165,7 +1167,10 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	// Um campo pode virar "botões"? Só com lista fechada de opções conhecida de antemão.
 	private campoAceitaBotoes(campo: { id: string; tipo?: string }): boolean {
 		if (campo.id === ID_STATUS || campo.id === ID_DATA_ACAO) return true;
-		// Os três de comportamento têm lista fixa própria (ver opcoesDoCampo em area-captura.ts).
+		// Antecedência é número de dias digitado, não lista de opções — não há o que apresentar em
+		// botões, então nem oferece a escolha (ver desenharCampoNumerico em area-captura.ts).
+		if (campo.id === ID_ANTECEDENCIA_ACAO) return false;
+		// Os dois outros de comportamento têm lista fixa própria (ver opcoesDoCampo em area-captura.ts).
 		if (IDS_CAMPOS_COMPORTAMENTO.includes(campo.id)) return true;
 		const def = this.grupo.propriedades.find((p) => p.id === campo.id);
 		if (!def) return false;
