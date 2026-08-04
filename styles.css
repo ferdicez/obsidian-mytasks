@@ -155,11 +155,17 @@
 
 /* ---------- Área de captura da barra lateral ---------- */
 
-/* A sidebar é só captura: dois blocos empilhados (Inbox e demandas), sem lista de tarefas. */
+/* A aba "demandas" da sidebar: só a área de captura, sem lista embaixo. */
 .mytasks-sidebar-captura {
 	display: flex;
 	flex-direction: column;
 	gap: 18px;
+}
+
+/* Com o toggle da view assumindo a troca inbox/demandas, o MotorLista desenha um cabeçalho vazio
+   (ele não tem mais seletores no modo Inbox) — sem isso sobraria uma faixa em branco no topo. */
+.mytasks-container > .mytasks-cabecalho:empty {
+	display: none;
 }
 
 /* Cada bloco na ordem do print: título → campo → pastilhas → presets. */

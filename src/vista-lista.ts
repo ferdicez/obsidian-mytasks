@@ -1,16 +1,27 @@
-import { ItemView, ViewStateResult, WorkspaceLeaf } from "obsidian";
+import { ItemView, ViewStateResult, WorkspaceLeaf, setIcon } from "obsidian";
 import type MyTasksPlugin from "./main";
-import { GrupoTarefas, configDoGrupo, grupoAtivoOuPrimeiro, primeiraOpcaoStatus } from "./tipos";
+import {
+	GrupoTarefas,
+	arquivoEhTarefaRelevante,
+	configDoGrupo,
+	grupoAtivoOuPrimeiro,
+	tarefaPertenceAoGrupo,
+} from "./tipos";
 import { AreaCaptura } from "./area-captura";
+import { MotorLista } from "./motor-lista";
+import { observarMudancasDoVault } from "./observador-vault";
 
 export const TIPO_VISTA_LISTA = "mytasks-lista";
 
 // A Lista da sidebar tem UMA instância por grupo. O grupo é guardado no view state (grupoId), a forma
 // idiomática do Obsidian de distinguir várias leaves do mesmo tipo de view (sobrevive a reinício).
 export class VistaLista extends ItemView {
-	private capturaInbox: AreaCaptura | null = null;
-	private capturaDemandas: AreaCaptura | null = null;
+	private motor: MotorLista | null = null;
+	private captura: AreaCaptura | null = null;
 	private grupoId: string | null = null;
+	// Aba visível. "inbox" mostra a caixa de entrada (captura simples + lista do Inbox); "demandas"
+	// é a área de captura de novas tarefas, com os campos e presets. Escolha dela.
+	private modo: "inbox" | "demandas" = "inbox";
 
 	constructor(leaf: WorkspaceLeaf, private plugin: MyTasksPlugin) {
 		super(leaf);
@@ -45,10 +56,19 @@ export class VistaLista extends ItemView {
 		return grupoAtivoOuPrimeiro(this.plugin.configuracoes, this.grupoId);
 	}
 
-	// Sem observador do vault de propósito: esta view não mostra mais nada que venha do vault, e
-	// redesenhar a cada mudança de arquivo apagaria o que ela estivesse digitando no meio da captura.
 	async onOpen() {
 		this.renderizar();
+
+		// O observador só interessa ao modo Inbox, que é o único que mostra conteúdo do vault. No modo
+		// demandas ele NÃO redesenha: apagaria o que estivesse sendo digitado no meio de uma captura.
+		observarMudancasDoVault({
+			app: this.app,
+			registerEvent: (ref) => this.registerEvent(ref),
+			ehRelevante: (caminho) => this.arquivoRelevante(caminho),
+			redesenhar: () => {
+				if (this.modo === "inbox") this.motor?.renderizar();
+			},
+		});
 	}
 
 	// Chamada por salvarConfiguracoes: mudar os campos/presets em Configurações precisa aparecer aqui
@@ -57,50 +77,81 @@ export class VistaLista extends ItemView {
 		this.renderizar();
 	}
 
-	// A barra lateral é SÓ captura — não lista tarefas. São dois blocos empilhados, na ordem do print
-	// dela: o do Inbox (captura crua, sem propriedades) e o de demandas (com as pastilhas embaixo do
-	// campo). Para VER as tarefas ela usa a Lista em aba, o Kanban ou o Calendário.
+	// Duas abas: "inbox" (a caixa de entrada de sempre, com a lista) e "demandas" (só a área de
+	// captura, com campos e presets). Pra VER as tarefas do grupo ela usa o Kanban, o Calendário ou
+	// a Lista em aba — a aba demandas é só de entrada.
 	private renderizar(): void {
 		const container = this.containerEl.children[1] as HTMLElement;
 		if (!container) return;
 		container.empty();
-		container.addClass("mytasks-sidebar-captura");
 
 		const grupo = this.grupoAtivo();
 		const configEfetiva = configDoGrupo(this.plugin.configuracoes, grupo);
 		const repositorio = this.plugin.repositorioDoGrupo(grupo.id);
 
-		// Bloco 1 — Inbox: só título e campo. Cai sempre no Inbox (primeira opção de status), que é o
-		// comportamento que a captura do Inbox sempre teve.
-		this.capturaInbox = new AreaCaptura(container.createDiv(), {
-			app: this.app,
-			repositorio,
-			configuracoes: configEfetiva,
-			titulo: "inbox",
-			icone: "inbox",
-			placeholder: "Adicionar ao Inbox...",
-			mostrarCampos: false,
-			statusFixo: primeiraOpcaoStatus(configEfetiva.status) ?? "",
-			aoCapturar: () => {},
-		});
-		this.capturaInbox.renderizar();
+		this.desenharToggle(container, grupo);
 
-		// Bloco 2 — demandas: mesmo campo, com as pastilhas de propriedade e os presets embaixo.
-		this.capturaDemandas = new AreaCaptura(container.createDiv(), {
+		if (this.modo === "inbox") {
+			this.captura = null;
+			// O MotorLista desenha o próprio toggle quando `mostrarToggleInbox` está ligado — aqui ele
+			// fica DESLIGADO, porque o toggle acima é da view (ele alterna inbox/demandas, não
+			// inbox/tarefas). `filtroInbox` prende o motor à caixa de entrada.
+			this.motor = new MotorLista(container.createDiv(), {
+				app: this.app,
+				repositorio,
+				configuracoes: configEfetiva,
+				modoInicial: "inbox",
+				permitirTrocaAgrupamento: false,
+				permitirEdicaoFiltro: false,
+				filtro: (t) => tarefaPertenceAoGrupo(t, grupo, this.plugin.configuracoes),
+			});
+			this.motor.renderizar();
+			return;
+		}
+
+		this.motor = null;
+		this.captura = new AreaCaptura(container.createDiv({ cls: "mytasks-sidebar-captura" }), {
 			app: this.app,
 			repositorio,
 			configuracoes: configEfetiva,
-			titulo: grupo.nome.toLowerCase(),
-			icone: grupo.icone,
 			placeholder: `Adicionar em ${grupo.nome}...`,
 			mostrarCampos: true,
 			aoCapturar: () => {},
 		});
-		this.capturaDemandas.renderizar();
+		this.captura.renderizar();
+	}
+
+	// As duas pastilhas do topo. Mesma casca visual do toggle antigo do MotorLista, pra não mudar a
+	// aparência que ela já conhece — o que mudou é o que a segunda aba mostra.
+	private desenharToggle(container: HTMLElement, grupo: GrupoTarefas): void {
+		const linha = container.createDiv({ cls: "mytasks-cabecalho" });
+		const toggle = linha.createDiv({ cls: "mytasks-toggle-inbox" });
+
+		const botaoInbox = toggle.createEl("button", { attr: { "aria-label": "Inbox" } });
+		setIcon(botaoInbox, "inbox");
+		botaoInbox.toggleClass("mytasks-toggle-ativo", this.modo === "inbox");
+		botaoInbox.addEventListener("click", () => {
+			if (this.modo === "inbox") return;
+			this.modo = "inbox";
+			this.renderizar();
+		});
+
+		const botaoDemandas = toggle.createEl("button", { text: grupo.nome });
+		botaoDemandas.toggleClass("mytasks-toggle-ativo", this.modo === "demandas");
+		botaoDemandas.addEventListener("click", () => {
+			if (this.modo === "demandas") return;
+			this.modo = "demandas";
+			this.renderizar();
+		});
+	}
+
+	private arquivoRelevante(caminho: string): boolean {
+		return arquivoEhTarefaRelevante(configDoGrupo(this.plugin.configuracoes, this.grupoAtivo()), caminho);
 	}
 
 	async onClose() {
-		this.capturaInbox = null;
-		this.capturaDemandas = null;
+		this.motor?.destruir();
+		this.motor = null;
+		this.captura = null;
 	}
 }

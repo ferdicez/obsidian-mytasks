@@ -32,6 +32,10 @@ export interface OpcoesMotorLista {
 	permitirEdicaoFiltro?: boolean;
 	permitirCriarTarefa?: boolean;
 	mostrarToggleInbox?: boolean;
+	// Prende o motor a um modo, SEM desenhar o toggle. Usado pela sidebar, onde quem alterna
+	// inbox/demandas é a própria view (o toggle de lá troca a tela inteira, não só a lista).
+	// Ausente = "tarefas", o comportamento de sempre.
+	modoInicial?: "tarefas" | "inbox";
 	// Rótulo do botão "Tarefas" do toggle Inbox/Tarefas — usado para mostrar o NOME do grupo na sidebar.
 	// Ausente = "Tarefas" (comportamento antigo / embeds).
 	rotuloModoTarefas?: string;
@@ -52,6 +56,7 @@ export class MotorLista {
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorLista) {
 		this.agrupamento = opcoes.agrupamentoInicial ?? "nenhum";
+		this.modo = opcoes.modoInicial ?? "tarefas";
 
 		const filtroInicial = opcoes.filtroInicialId ? obterFiltroSalvo(opcoes.configuracoes, opcoes.filtroInicialId) : undefined;
 		if (filtroInicial) {
@@ -75,7 +80,10 @@ export class MotorLista {
 		const todas = this.opcoes.repositorio.listarTarefas();
 		const base = todas.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true));
 
-		if (!this.opcoes.mostrarToggleInbox) {
+		// Sem toggle E sem modo fixado: é a Lista comum (aba, embed), que mostra tudo. Com o modo
+		// fixado por `modoInicial` (a sidebar), a separação inbox/tarefas continua valendo mesmo sem
+		// o toggle desenhado — senão a aba Inbox listaria o vault inteiro.
+		if (!this.opcoes.mostrarToggleInbox && !this.opcoes.modoInicial) {
 			const filtroInterativo = compilarFiltro(this.grupoFiltro, this.opcoes.app, null, this.opcoes.configuracoes);
 			return base.filter(filtroInterativo);
 		}
