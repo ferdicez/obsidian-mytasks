@@ -1,4 +1,4 @@
-import { App, setIcon } from "obsidian";
+import { App } from "obsidian";
 import {
 	ConfigEfetivaGrupo,
 	ConfiguracoesGestorTarefas,
@@ -42,6 +42,28 @@ export interface OpcoesMotorKanban {
 	aoTrocarGrupo?: (grupoId: string) => void;
 }
 
+// Modo "Semana": em vez das colunas de agrupamento, uma coluna por dia da semana com as tarefas
+// FIXAS da rotina — só as de recorrência semanal, que é o que ela pediu ("aparecem apenas tarefas
+// fixas (recorrencia semanal)"). Segunda a domingo: a semana de trabalho começa na segunda, ao
+// contrário da grade do calendário, que começa no domingo por convenção de calendário.
+const DIAS_SEMANA_KANBAN: { indice: number; rotulo: string }[] = [
+	{ indice: 1, rotulo: "segunda" },
+	{ indice: 2, rotulo: "terça" },
+	{ indice: 3, rotulo: "quarta" },
+	{ indice: 4, rotulo: "quinta" },
+	{ indice: 5, rotulo: "sexta" },
+	{ indice: 6, rotulo: "sábado" },
+	{ indice: 0, rotulo: "domingo" },
+];
+
+// Dia da semana de uma data AAAA-MM-DD, lida como data local. `new Date("2026-08-04")` seria
+// interpretada como UTC e cairia no dia anterior à noite no fuso do Brasil — mesmo cuidado que
+// formatarData já toma no resto do plugin.
+function diaDaSemanaDaData(dataStr: string): number {
+	const [ano, mes, dia] = dataStr.split("-").map(Number);
+	return new Date(ano, mes - 1, dia).getDay();
+}
+
 export class MotorKanban {
 	private agrupamento: TipoAgrupamento;
 	// Segundo nível: divide as tarefas DENTRO de cada coluna em seções. "nenhum" = lista corrida (padrão).
@@ -49,6 +71,8 @@ export class MotorKanban {
 	private grupoFiltro: GrupoFiltro = grupoFiltroVazio();
 	private filtroSalvoId: string | null = null;
 	private areaGrade: HTMLElement | null = null;
+	// "colunas" = Kanban de sempre (agrupamento em colunas). "semana" = rotina fixa da semana.
+	private modo: "colunas" | "semana" = "colunas";
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorKanban) {
 		this.agrupamento = opcoes.agrupamentoInicial ?? ID_STATUS;
@@ -106,8 +130,78 @@ export class MotorKanban {
 		];
 	}
 
+	// Modo "Semana": uma coluna por dia (seg→dom) com as tarefas de recorrência SEMANAL. O dia vem da
+	// data da tarefa — a próxima ocorrência dela. Uma tarefa semanal sem data não tem dia definido, e
+	// vai pra coluna "sem dia" no fim, em vez de sumir da tela sem explicação.
+	private renderizarSemana(): void {
+		if (!this.areaGrade) return;
+		this.areaGrade.empty();
+
+		const semanais = this.tarefasFiltradas().filter((t) => t.recorrencia === "semanal");
+
+		if (semanais.length === 0) {
+			this.areaGrade.createEl("p", {
+				text: "Nenhuma tarefa com recorrência semanal. As tarefas fixas da sua rotina aparecem aqui.",
+				cls: "mytasks-vazio",
+			});
+			return;
+		}
+
+		const semDia: Tarefa[] = [];
+		const porDia = new Map<number, Tarefa[]>();
+		for (const dia of DIAS_SEMANA_KANBAN) porDia.set(dia.indice, []);
+
+		for (const tarefa of semanais) {
+			if (!tarefa.data) {
+				semDia.push(tarefa);
+				continue;
+			}
+			porDia.get(diaDaSemanaDaData(tarefa.data))?.push(tarefa);
+		}
+
+		for (const dia of DIAS_SEMANA_KANBAN) {
+			const tarefas = porDia.get(dia.indice) ?? [];
+			this.desenharColunaSemana(dia.rotulo, tarefas);
+		}
+		if (semDia.length > 0) this.desenharColunaSemana("sem dia", semDia);
+	}
+
+	// A coluna do modo Semana usa a mesma casca visual das colunas do Kanban, mas NÃO é alvo de
+	// soltura: arrastar aqui teria que reescrever a data pra cair noutro dia da semana, o que é uma
+	// decisão de recorrência (qual ocorrência muda?) que ela não pediu.
+	private desenharColunaSemana(rotulo: string, tarefas: Tarefa[]): void {
+		if (!this.areaGrade) return;
+		const colunaEl = this.areaGrade.createDiv({ cls: "mytasks-kanban-coluna" });
+
+		const cabecalhoColuna = colunaEl.createDiv({ cls: "mytasks-kanban-cabecalho-coluna" });
+		cabecalhoColuna.createEl("span", { text: rotulo, cls: "mytasks-kanban-titulo-coluna" });
+		cabecalhoColuna.createEl("span", { text: String(tarefas.length), cls: "mytasks-kanban-contagem-coluna" });
+
+		const listaColuna = colunaEl.createDiv({ cls: "mytasks-kanban-lista-coluna" });
+
+		// O subagrupamento vale aqui também: dentro do dia, as tarefas podem ser divididas por status,
+		// etiqueta etc. No modo semana ele NUNCA coincide com as colunas (que são dias, não uma
+		// propriedade), então não passa por subagrupamentoEfetivo — nada a excluir.
+		if (this.subagrupamento === "nenhum") {
+			for (const tarefa of tarefas) this.desenharCartao(listaColuna, tarefa);
+			return;
+		}
+
+		for (const secao of agruparTarefas(tarefas, this.subagrupamento, this.opcoes.configuracoes, this.opcoes.app)) {
+			if (secao.tarefas.length === 0) continue;
+			const secaoEl = listaColuna.createDiv({ cls: "mytasks-kanban-secao" });
+			secaoEl.createDiv({ cls: "mytasks-kanban-cabecalho-secao", text: secao.rotulo });
+			const listaSecao = secaoEl.createDiv({ cls: "mytasks-kanban-lista-secao" });
+			for (const tarefa of secao.tarefas) this.desenharCartao(listaSecao, tarefa);
+		}
+	}
+
 	private renderizarGrade(): void {
 		if (!this.areaGrade) return;
+		if (this.modo === "semana") {
+			this.renderizarSemana();
+			return;
+		}
 		this.areaGrade.empty();
 
 		const colunas = this.colunas();
@@ -228,23 +322,50 @@ export class MotorKanban {
 
 		// Agrupamento como abas lado a lado (igual às visualizações do Calendário), não como menu:
 		// trocar de agrupamento é a ação mais frequente do Kanban, então fica sempre à vista.
+		//
+		// A aba "semana" entra no MESMO bloco das de agrupamento porque as duas são a mesma escolha do
+		// ponto de vista dela ("como o quadro está dividido"), e são mutuamente exclusivas: no modo
+		// semana as colunas são os dias, não o agrupamento. O seletor de agrupamento move a marcação
+		// sozinho, então a aba semana precisa apagá-la à mão ao ser clicada — e vice-versa.
 		if (this.opcoes.permitirTrocaAgrupamento !== false) {
-			new SeletorAgrupamento(cabecalho, {
+			const seletor = new SeletorAgrupamento(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
 				agrupamentoAtual: this.agrupamento,
 				permitirNenhum: false,
 				permitirDia: false,
 				apresentacao: "abas",
+				// No modo semana NENHUMA aba de agrupamento fica acesa: as colunas são os dias. O valor
+				// de `agrupamento` continua guardado (é pra onde ela volta ao sair do modo), mas mostrá-lo
+				// como ativo dizia que o quadro estava agrupado por status quando não estava.
+				semSelecao: this.modo === "semana",
 				aoEscolher: (agrupamento) => {
 					this.agrupamento = agrupamento;
+					// Escolher um agrupamento sai do modo semana: as colunas voltam a ser o agrupamento.
+					const saiuDaSemana = this.modo === "semana";
+					this.modo = "colunas";
+					if (saiuDaSemana) {
+						// O cabeçalho tem controles que só existem fora do modo semana (subagrupamento) —
+						// redesenha inteiro pra eles voltarem, em vez de só a grade. O redesenho já
+						// reconstrói as abas com a marcação certa, então não há o que apagar à mão aqui.
+						this.renderizar();
+						return;
+					}
 					this.renderizarGrade();
 				},
+			});
+
+			// A marcação da aba é reconstruída a cada `renderizar()` (que roda ao entrar e ao sair do
+			// modo), então não é preciso guardar o elemento pra apagá-la à mão.
+			seletor.adicionarAba("semana", this.modo === "semana", () => {
+				if (this.modo === "semana") return;
+				this.modo = "semana";
+				this.renderizar();
 			});
 		}
 
 		// Subagrupamento: botão discreto ANTES do filtro. Menu (não abas) de propósito — as abas do
 		// cabeçalho já são o agrupamento principal, e uma segunda fileira igual competiria por espaço
-		// e confundiria os dois níveis.
+		// e confundiria os dois níveis. Vale TAMBÉM no modo semana, dividindo cada dia em seções.
 		if (this.opcoes.permitirTrocaAgrupamento !== false) {
 			new SeletorAgrupamento(cabecalho, {
 				configuracoes: this.opcoes.configuracoes,
@@ -257,7 +378,9 @@ export class MotorKanban {
 				// e "layout-grid" é o último recurso pra nunca cair num botão vazio.
 				icone: ["rows-3", "rows", "layout-grid"],
 				rotulo: "subagrupamento",
-				excluir: () => this.agrupamento,
+				// No modo semana as colunas são os dias, não uma propriedade: não há agrupamento pra
+				// excluir da lista, e esconder um item ali tiraria uma opção legítima.
+				excluir: () => (this.modo === "semana" ? undefined : this.agrupamento),
 				// Sem `elementoAlinhamento`: o menu desce colado no próprio botão, igual ao do filtro
 				// ao lado. Alinhar pelo cabeçalho inteiro jogava o menu lá pra borda esquerda da view,
 				// longe do botão clicado — os dois seletores vizinhos abriam em lugares diferentes.
@@ -268,30 +391,28 @@ export class MotorKanban {
 			});
 		}
 
-		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
-		if (this.opcoes.permitirEdicaoFiltro !== false && !filtroMovelVazio) {
-			new SeletorFiltroSalvo(cabecalho, {
-				configuracoes: this.opcoes.configuracoes,
-				filtroAtualId: this.filtroSalvoId,
-				restringirAIds: this.opcoes.filtrosExtrasIds,
-				aoEscolher: (filtroId, raiz) => {
-					this.filtroSalvoId = filtroId;
-					this.grupoFiltro = raiz;
-					this.renderizarGrade();
-				},
-			});
-		}
+		this.desenharFiltroSalvo(cabecalho);
 
-		if (this.opcoes.permitirCriarTarefa !== false) {
-			const botaoNova = cabecalho.createEl("button", { cls: "mytasks-botao-nova-tarefa mytasks-seletor-discreto" });
-			const iconeNova = botaoNova.createSpan({ cls: "mytasks-seletor-discreto-icone" });
-			setIcon(iconeNova, "square-plus");
-			botaoNova.createSpan({ cls: "mytasks-seletor-discreto-texto", text: "nova tarefa" });
-			botaoNova.addEventListener("click", async () => {
-				const arquivo = await this.opcoes.repositorio.criarTarefaEmBranco();
-				this.renderizar();
-				this.opcoes.app.workspace.openLinkText(arquivo.path, "", false);
-			});
-		}
+		// O botão "nova tarefa" foi REMOVIDO do Kanban a pedido dela: criar tarefa agora é papel da
+		// área de captura da barra lateral. `permitirCriarTarefa` continua na interface porque a Lista
+		// e os embeds ainda a usam.
+	}
+
+	// A barrinha de Filtro salvo. Extraída num método porque o modo semana também a desenha — lá ela é
+	// o único controle depois das abas.
+	private desenharFiltroSalvo(cabecalho: HTMLElement): void {
+		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
+		if (this.opcoes.permitirEdicaoFiltro === false || filtroMovelVazio) return;
+
+		new SeletorFiltroSalvo(cabecalho, {
+			configuracoes: this.opcoes.configuracoes,
+			filtroAtualId: this.filtroSalvoId,
+			restringirAIds: this.opcoes.filtrosExtrasIds,
+			aoEscolher: (filtroId, raiz) => {
+				this.filtroSalvoId = filtroId;
+				this.grupoFiltro = raiz;
+				this.renderizarGrade();
+			},
+		});
 	}
 }

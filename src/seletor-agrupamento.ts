@@ -25,6 +25,10 @@ export interface OpcoesSeletorAgrupamento {
 	// "abas" desenha as opções lado a lado num bloco único (igual às visualizações do Calendário),
 	// em vez do botão com menu suspenso. Só vale quando a lista de opções é curta.
 	apresentacao?: "menu" | "abas";
+	// Desenha as abas SEM nenhuma marcada, mesmo havendo um `agrupamentoAtual`. Serve pro Kanban no
+	// modo "semana": lá as colunas são os dias, então nenhum agrupamento está em vigor — mas o valor
+	// precisa continuar guardado, pra voltar ao mesmo lugar quando ela sair do modo semana.
+	semSelecao?: boolean;
 	// Ícone do botão na apresentação "menu". Ausente = "layout-grid" (agrupamento principal). Aceita
 	// uma LISTA em ordem de preferência: o primeiro que existir na versão do Obsidian é usado (ver
 	// desenharIconeComAlternativas). O subagrupamento do Kanban pede "grid-2x2-plus" e cai em
@@ -105,7 +109,9 @@ export class SeletorAgrupamento {
 				text: rotuloAgrupamento(agrupamento, this.opcoes.configuracoes),
 			});
 			this.abas.set(agrupamento, aba);
-			if (agrupamento === this.agrupamentoAtual) aba.addClass("mytasks-calendario-aba-modo-ativa");
+			if (!this.opcoes.semSelecao && agrupamento === this.agrupamentoAtual) {
+				aba.addClass("mytasks-calendario-aba-modo-ativa");
+			}
 			aba.addEventListener("click", () => {
 				if (agrupamento === this.agrupamentoAtual) return;
 				this.agrupamentoAtual = agrupamento;
@@ -121,6 +127,26 @@ export class SeletorAgrupamento {
 		for (const [agrupamento, aba] of this.abas) {
 			aba.toggleClass("mytasks-calendario-aba-modo-ativa", agrupamento === this.agrupamentoAtual);
 		}
+	}
+
+	// Acrescenta uma pastilha AVULSA ao bloco de abas — uma opção que não é um agrupamento, mas
+	// concorre com eles pelo mesmo espaço (o modo "semana" do Kanban, cujas colunas são os dias).
+	// Devolve o elemento para quem chamou controlar a marcação de ativa: escolher um agrupamento
+	// desliga essa aba, e o seletor não sabe nada sobre ela.
+	adicionarAba(rotulo: string, ativa: boolean, aoClicar: () => void): HTMLButtonElement | null {
+		// Só existe na apresentação "abas": em "menu" não há bloco de pastilhas onde encaixar.
+		const bloco = this.abas.values().next().value?.parentElement;
+		if (!bloco) return null;
+
+		const aba = bloco.createEl("button", { cls: "mytasks-calendario-aba-modo", text: rotulo });
+		if (ativa) aba.addClass("mytasks-calendario-aba-modo-ativa");
+		aba.addEventListener("click", () => {
+			// A marcação das abas de agrupamento sai junto: as duas coisas são exclusivas.
+			for (const outra of this.abas.values()) outra.removeClass("mytasks-calendario-aba-modo-ativa");
+			aba.addClass("mytasks-calendario-aba-modo-ativa");
+			aoClicar();
+		});
+		return aba;
 	}
 
 	private opcoesValidas(): TipoAgrupamento[] {

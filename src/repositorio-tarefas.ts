@@ -275,7 +275,12 @@ export class RepositorioTarefas {
 		return arquivo;
 	}
 
-	async criarTarefaRapida(titulo: string): Promise<TFile> {
+	// `valores` vem da área de captura da sidebar (campos configuráveis + preset clicado). Ausente = a
+	// captura simples de sempre: Inbox, sem data, só o que o sufixo de alias herdar.
+	async criarTarefaRapida(
+		titulo: string,
+		valores?: { status?: string | null; data?: string | null; propriedades?: Record<string, PropriedadeValor> }
+	): Promise<TFile> {
 		const config = this.obterConfiguracoes();
 
 		// Sufixo " - fulano": procura, SÓ entre as notas cadastradas em "Arquivos fixos" das propriedades do
@@ -301,22 +306,38 @@ export class RepositorioTarefas {
 			}
 		}
 
+		// O que a usuária escolheu na área de captura vence a herança do alias: ela acabou de marcar
+		// aquele valor na tela, então ele é mais específico do que o que veio da nota do cliente.
+		// Valor `null` é escolha explícita de "sem valor" e também apaga o herdado.
+		if (valores?.propriedades) {
+			for (const [id, valor] of Object.entries(valores.propriedades)) propriedades[id] = valor;
+		}
+
+		const data = valores?.data ?? null;
+		// Sem status escolhido na captura, a regra posicional de sempre: com data, a primeira opção "com
+		// data"; sem data, o Inbox. Antes disso a captura caía SEMPRE no Inbox — o que deixaria uma tarefa
+		// capturada com prazo parada na caixa de entrada, longe das views que ela usa pra trabalhar.
+		const status =
+			valores?.status ||
+			(data ? opcaoStatusComData(config.status) ?? "" : primeiraOpcaoStatus(config.status) ?? "");
+		const noInbox = status === (primeiraOpcaoStatus(config.status) ?? "");
+
 		const arquivo = await this.criarTarefa(titulo, {
-			status: primeiraOpcaoStatus(config.status) ?? "",
-			data: null,
+			status,
+			data,
 			horario: null,
 			recorrencia: "nenhuma",
-			// Captura rápida nasce sempre no Inbox, então a modelo consultada é a do Inbox (se houver).
-			manterHistorico: await this.manterHistoricoInicial(config, true),
+			// A nota modelo consultada é a do Inbox só quando a tarefa de fato nasce lá.
+			manterHistorico: await this.manterHistoricoInicial(config, noInbox),
 			recorrenciaDataFim: null,
 			diasAntecedenciaAviso: null,
 			propriedades,
 		});
 
-		// A captura rápida nasce sempre no Inbox — aplica o mesmo corpo de nota modelo que "Nova tarefa" usa
-		// (nota modelo do Inbox se houver, senão a geral, senão a geração automática). Ao contrário do botão
-		// "Nova tarefa", mantém o título digitado e NÃO abre a nota (o fluxo de captura rápida segue fluido).
-		const corpo = await this.obterCorpoNovaTarefa(config, true);
+		// Aplica o mesmo corpo de nota modelo que "Nova tarefa" usa (a do Inbox se a tarefa nasceu lá,
+		// senão a geral, senão a geração automática). Ao contrário do botão "Nova tarefa", mantém o
+		// título digitado e NÃO abre a nota (o fluxo de captura rápida segue fluido).
+		const corpo = await this.obterCorpoNovaTarefa(config, noInbox);
 		if (corpo) await this.app.vault.append(arquivo, "\n" + corpo + "\n");
 
 		return arquivo;

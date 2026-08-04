@@ -21,6 +21,7 @@ import { SeletorFiltroSalvo } from "./seletor-filtro-salvo";
 import { SeletorGrupo } from "./seletor-grupo";
 import { ServicoCalendariosExternos, compararPorHorario } from "./calendarios-externos";
 import { desenharEventoExterno } from "./render-evento-externo";
+import { MotorLista } from "./motor-lista";
 
 export type { ModoCalendario };
 
@@ -101,6 +102,8 @@ export class MotorCalendario {
 	private filtroSalvoId: string | null = null;
 	// Timer que faz a marca de "agora" do modo Dia andar sozinha (ver agendarMarcaDeAgora).
 	private timerAgora: number | null = null;
+	// Motores das duas colunas do modo "Lista" — guardados só para destruir junto com o calendário.
+	private motoresLista: MotorLista[] = [];
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorCalendario) {
 		this.modo = opcoes.modoInicial ?? "mes";
@@ -124,7 +127,8 @@ export class MotorCalendario {
 		areaGrade.addClass("mytasks-calendario-grade-area-aberta");
 		if (this.modo === "semana-horarios") areaGrade.addClass("mytasks-calendario-grade-area-vertical");
 
-		if (this.modo === "mes") this.desenharMes(areaGrade);
+		if (this.modo === "lista") this.desenharLista(areaGrade);
+		else if (this.modo === "mes") this.desenharMes(areaGrade);
 		else if (this.modo === "semana-horarios") this.desenharSemanaComHorarios(areaGrade);
 		else if (this.modo === "semana-kanban") this.desenharSemanaKanban(areaGrade);
 		else this.desenharAno(areaGrade);
@@ -133,6 +137,69 @@ export class MotorCalendario {
 	destruir(): void {
 		// O único recurso fora do containerEl é o timer da marca de "agora" do modo Dia.
 		this.cancelarMarcaDeAgora();
+		this.destruirMotoresDaLista();
+	}
+
+	// ---------- Modo "Lista": duas colunas, cada uma com uma Visualização salva ----------
+
+	private destruirMotoresDaLista(): void {
+		for (const motor of this.motoresLista) motor.destruir();
+		this.motoresLista = [];
+	}
+
+	// Cada coluna é um MotorLista completo rodando sobre o filtro da Visualização salva escolhida em
+	// Configurações. Reuso, não código novo: agrupamento, ordenação, cartões e menu do clique direito
+	// vêm de graça, e o que a coluna mostra é exatamente o que a mesma visualização mostra embutida
+	// numa nota.
+	private desenharLista(container: HTMLElement): void {
+		this.destruirMotoresDaLista();
+		container.addClass("mytasks-calendario-lista");
+
+		const cfg = this.opcoes.configuracoes;
+		const colunas: { id: string | null; lado: "esquerda" | "direita" }[] = [
+			{ id: cfg.calendarioListaColunaEsquerdaId, lado: "esquerda" },
+			{ id: cfg.calendarioListaColunaDireitaId, lado: "direita" },
+		];
+
+		for (const coluna of colunas) {
+			const colunaEl = container.createDiv({ cls: "mytasks-calendario-lista-coluna" });
+			const visualizacao = coluna.id ? cfg.visualizacoesSalvas.find((v) => v.id === coluna.id) : undefined;
+
+			// Coluna sem visualização escolhida (ou apontando pra uma que foi apagada depois) explica o
+			// que fazer, em vez de aparecer vazia como se não houvesse tarefa nenhuma.
+			if (!visualizacao) {
+				colunaEl.createEl("p", {
+					cls: "mytasks-vazio",
+					text: coluna.id
+						? "A Visualização salva desta coluna não existe mais — escolha outra em Configurações → Calendário."
+						: "Escolha uma Visualização salva para esta coluna em Configurações → Calendário.",
+				});
+				continue;
+			}
+
+			colunaEl.createDiv({ cls: "mytasks-calendario-lista-titulo", text: visualizacao.nome });
+
+			const filtroDaColuna = compilarFiltro(visualizacao.raiz, this.opcoes.app, null, cfg);
+			const motor = new MotorLista(colunaEl.createDiv(), {
+				app: this.opcoes.app,
+				repositorio: this.opcoes.repositorio,
+				configuracoes: cfg,
+				// O filtro do CALENDÁRIO (barrinha do cabeçalho) continua valendo, somado ao da
+				// visualização: as duas colunas respeitam o que ela filtrou na tela.
+				filtro: (tarefa) => {
+					if (this.opcoes.filtro && !this.opcoes.filtro(tarefa)) return false;
+					return filtroDaColuna(tarefa);
+				},
+				agrupamentoInicial: visualizacao.agrupamento ?? "nenhum",
+				// A coluna é estreita e já tem título próprio: sem seletores de agrupamento/filtro nem
+				// botão de nova tarefa, que duplicariam controles que o cabeçalho do calendário já tem.
+				permitirTrocaAgrupamento: false,
+				permitirEdicaoFiltro: false,
+				permitirCriarTarefa: false,
+			});
+			motor.renderizar();
+			this.motoresLista.push(motor);
+		}
 	}
 
 	// ---------- Marca de "agora" (modo Dia) ----------
@@ -262,19 +329,23 @@ export class MotorCalendario {
 
 		const ladoEsquerdo = cabecalho.createDiv({ cls: "mytasks-calendario-cabecalho-lado" });
 
-		const navegacao = ladoEsquerdo.createDiv({ cls: "mytasks-calendario-navegacao" });
+		// O modo "Lista" não tem período: as colunas são Visualizações salvas (filtros), não um
+		// intervalo de datas. Setas e "Hoje" não teriam o que navegar, então nem aparecem.
+		if (this.modo !== "lista") {
+			const navegacao = ladoEsquerdo.createDiv({ cls: "mytasks-calendario-navegacao" });
 
-		const botaoAnterior = navegacao.createEl("button", { text: "‹" });
-		botaoAnterior.addEventListener("click", () => this.navegar(-1));
+			const botaoAnterior = navegacao.createEl("button", { text: "‹" });
+			botaoAnterior.addEventListener("click", () => this.navegar(-1));
 
-		const botaoHoje = navegacao.createEl("button", { text: "Hoje", cls: "mytasks-calendario-botao-hoje" });
-		botaoHoje.addEventListener("click", () => {
-			this.dataReferencia = new Date();
-			this.renderizar();
-		});
+			const botaoHoje = navegacao.createEl("button", { text: "Hoje", cls: "mytasks-calendario-botao-hoje" });
+			botaoHoje.addEventListener("click", () => {
+				this.dataReferencia = new Date();
+				this.renderizar();
+			});
 
-		const botaoProximo = navegacao.createEl("button", { text: "›" });
-		botaoProximo.addEventListener("click", () => this.navegar(1));
+			const botaoProximo = navegacao.createEl("button", { text: "›" });
+			botaoProximo.addEventListener("click", () => this.navegar(1));
+		}
 
 		// Ícone discreto de troca de grupo: logo APÓS a navegação "Hoje" e ANTES do rótulo do mês/semana.
 		if (this.opcoes.configuracoesGlobais && this.opcoes.grupoAtivoId && this.opcoes.aoTrocarGrupo) {
@@ -289,7 +360,9 @@ export class MotorCalendario {
 			}
 		}
 
-		ladoEsquerdo.createEl("span", { text: this.rotuloPeriodo(), cls: "mytasks-calendario-rotulo-periodo" });
+		if (this.modo !== "lista") {
+			ladoEsquerdo.createEl("span", { text: this.rotuloPeriodo(), cls: "mytasks-calendario-rotulo-periodo" });
+		}
 
 		const ladoDireito = cabecalho.createDiv({ cls: "mytasks-calendario-cabecalho-lado mytasks-calendario-cabecalho-lado-direito" });
 

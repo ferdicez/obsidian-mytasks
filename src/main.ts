@@ -2,12 +2,17 @@ import { Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import {
 	ACOES_FIXAS_PADRAO,
 	CONFIGURACOES_PADRAO,
+	CONFIG_CAPTURA_PADRAO,
 	ConfigAcaoFixa,
 	ConfiguracoesGestorTarefas,
 	GRUPO_PADRAO,
+	ID_DATA_ACAO,
 	IdAcaoFixa,
+	ModoCalendario,
 	ORDEM_ACOES_FIXAS,
 	botoesAcaoPadrao,
+	presetsCapturaPadrao,
+	camposCapturaPadrao,
 	GrupoTarefas,
 	INTERVALO_ATUALIZACAO_PADRAO_MIN,
 	arquivoEhTarefaRelevante,
@@ -142,9 +147,11 @@ export default class MyTasksPlugin extends Plugin {
 			this.ativarVistaKanbanAba();
 		});
 
+		// O `id` é mantido de propósito, mesmo com o nome mudando: é ele que amarra o atalho de teclado
+		// que ela já tenha configurado. A view virou área de captura (não lista mais tarefas).
 		this.addCommand({
 			id: "abrir-lista-tarefas",
-			name: "Abrir lista de tarefas",
+			name: "Abrir captura de tarefas (barra lateral)",
 			callback: () => this.ativarVistaLista(this.grupoDefault().id),
 		});
 
@@ -390,6 +397,69 @@ export default class MyTasksPlugin extends Plugin {
 			{} as Record<IdAcaoFixa, ConfigAcaoFixa>
 		);
 
+		// Captura rápida da sidebar. Mesma distinção dos botões de ação: `undefined` é grupo salvo antes
+		// da captura existir (semeia os presets de exemplo); um objeto salvo com lista vazia é escolha
+		// dela e é respeitado. O merge por campo garante que uma chave nova de ConfigCaptura no futuro
+		// nasça preenchida sem apagar o que ela já configurou.
+		if (dadosDoGrupo.captura === undefined) {
+			grupo.captura = {
+				...CONFIG_CAPTURA_PADRAO,
+				campos: camposCapturaPadrao(grupo.propriedades),
+				camposVisiveis: [],
+				presets: presetsCapturaPadrao(grupo.status),
+				camposSemeados: true,
+			};
+		} else {
+			const salva = grupo.captura ?? ({} as typeof grupo.captura);
+			grupo.captura = {
+				...CONFIG_CAPTURA_PADRAO,
+				...salva,
+				camposVisiveis: Array.isArray(salva.camposVisiveis) ? [...salva.camposVisiveis] : [],
+				// Clone profundo: os presets são editados no lugar pela tela de Configurações, e um
+				// spread raso deixaria grupos diferentes apontando pros mesmos objetos de ação.
+				presets: Array.isArray(salva.presets) ? JSON.parse(JSON.stringify(salva.presets)) : [],
+			};
+
+			// Correção pontual: a primeira versão da captura gravou `camposVisiveis: []` em todo grupo,
+			// então a barra de propriedades nascia vazia e o recurso parecia quebrado. Semeia UMA vez
+			// nesses grupos — `camposSemeados` é o carimbo que impede os campos de voltarem sozinhos
+			// depois, se ela desmarcar todos de propósito.
+			if (!grupo.captura.camposSemeados) {
+				if (grupo.captura.camposVisiveis.length === 0 && !grupo.captura.campos) {
+					grupo.captura.campos = camposCapturaPadrao(grupo.propriedades);
+				}
+				grupo.captura.camposSemeados = true;
+			}
+
+			// `camposVisiveis` (lista de ids) → `campos` (id + apresentação). A ORDEM que ela já tinha é
+			// preservada, e tudo começa como "menu", que era o único comportamento que existia — trocar
+			// pra botões é escolha dela, campo a campo. `camposVisiveis` é esvaziado depois de migrado
+			// pra não ficarem duas fontes de verdade divergindo na próxima gravação.
+			if (!grupo.captura.campos && grupo.captura.camposVisiveis.length > 0) {
+				grupo.captura.campos = grupo.captura.camposVisiveis.map((id) => ({ id, apresentacao: "menu" as const }));
+
+				// Uma vez só, na conversão: o prazo vai pra frente e vira botões (hoje/amanhã/escolher
+				// data), que é o layout que ela desenhou. Os campos que ela já tinha marcado são todos
+				// mantidos, só reordenados — e daqui pra frente a ordem é dela, porque esta migração não
+				// roda de novo (`campos` passa a existir).
+				const prazo = grupo.captura.campos.find((c) => c.id === ID_DATA_ACAO);
+				if (prazo) {
+					prazo.apresentacao = "botoes";
+					grupo.captura.campos = [prazo, ...grupo.captura.campos.filter((c) => c !== prazo)];
+				}
+			}
+			if (grupo.captura.campos) grupo.captura.camposVisiveis = [];
+		}
+
+		// Modo "Lista" do calendário: a chave nova de calendarioPropriedadesVisiveisPorModo não existe
+		// em configs salvas antes dele. Sem isso, a tela de Configurações lê `undefined` e quebra ao
+		// tentar montar a lista de propriedades visíveis desse modo.
+		const porModo = (grupo.calendarioPropriedadesVisiveisPorModo ?? {}) as Record<ModoCalendario, string[] | null>;
+		for (const modo of Object.keys(GRUPO_PADRAO.calendarioPropriedadesVisiveisPorModo) as ModoCalendario[]) {
+			if (porModo[modo] === undefined) porModo[modo] = [];
+		}
+		grupo.calendarioPropriedadesVisiveisPorModo = porModo;
+
 		// Chave técnica da data ausente: deriva da normalização do rótulo salvo.
 		if (!grupo.dataTarefa.chave) {
 			grupo.dataTarefa.chave = normalizarChave(grupo.dataTarefa.rotulo);
@@ -421,6 +491,7 @@ export default class MyTasksPlugin extends Plugin {
 		const calendarioPropriedadesVisiveisAntigo = dadosDoGrupo.calendarioPropriedadesVisiveis as string[] | null | undefined;
 		if (calendarioPropriedadesVisiveisAntigo !== undefined && !dadosDoGrupo.calendarioPropriedadesVisiveisPorModo) {
 			grupo.calendarioPropriedadesVisiveisPorModo = {
+				lista: [],
 				mes: [],
 				"semana-horarios": [],
 				"semana-kanban": calendarioPropriedadesVisiveisAntigo,
@@ -452,5 +523,16 @@ export default class MyTasksPlugin extends Plugin {
 
 	async salvarConfiguracoes() {
 		await this.saveData(this.configuracoes);
+		// A sidebar de captura desenha uma vez e não observa o vault (nada nela vem de arquivo), então
+		// sem este aviso ela ficaria mostrando a configuração ANTIGA até ser reaberta — foi o que
+		// aconteceu quando os campos escolhidos em Configurações não apareceram na captura.
+		this.redesenharCapturas();
+	}
+
+	redesenharCapturas(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(TIPO_VISTA_LISTA)) {
+			const view = leaf.view as { redesenhar?: () => void };
+			view.redesenhar?.();
+		}
 	}
 }

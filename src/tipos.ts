@@ -4,11 +4,13 @@ export type TipoPropriedade = "texto" | "selecao" | "data" | "link_arquivo" | "l
 
 // A chave "semana-horarios" é histórica: o modo virou "Dia" (um dia só, dividido em manhã/tarde/noite),
 // mas o id técnico é preservado pra não invalidar data.json nem Visualizações salvas já existentes.
-export type ModoCalendario = "mes" | "semana-horarios" | "semana-kanban" | "ano";
+export type ModoCalendario = "lista" | "mes" | "semana-horarios" | "semana-kanban" | "ano";
 
 // A ordem das chaves aqui é a ordem em que os modos aparecem no seletor do calendário
-// e na tela de Configurações (dia → semana → mês → ano).
+// e na tela de Configurações (lista → dia → semana → mês → ano). "Lista" vem ANTES de "Dia"
+// por pedido dela — é a visão de entrada, com duas Visualizações salvas lado a lado.
 export const ROTULOS_MODO: Record<ModoCalendario, string> = {
+	lista: "Lista",
 	"semana-horarios": "Dia",
 	"semana-kanban": "Semana",
 	mes: "Mês",
@@ -322,6 +324,122 @@ export function botoesAcaoPadrao(status: ConfigStatus): BotaoAcao[] {
 	return botoes;
 }
 
+// ---------------------------------------------------------------------------
+// Captura rápida da barra lateral
+// ---------------------------------------------------------------------------
+
+// Um PRESET de captura: digita o título, clica no preset, e a tarefa nasce já com o conjunto de
+// propriedades dele. Reusa `AcaoBotao` de propósito — "grave este valor neste campo" é exatamente a
+// mesma operação do menu do clique direito, com a diferença de que aqui ela roda na CRIAÇÃO da tarefa
+// (ver aplicarAcoesNaCriacao em repositorio-tarefas.ts) em vez de numa tarefa que já existe.
+export interface PresetCaptura {
+	id: string;
+	nome: string;
+	visivel: boolean;
+	icone?: string;
+	acoes: AcaoBotao[];
+}
+
+// Como um campo da captura se apresenta na tela.
+//   menu   → uma pastilha só ("status"); clicar abre a lista de opções (o padrão, econômico em espaço)
+//   botoes → uma pastilha por opção, todas à vista ("fazer", "iniciado", "em andamento"…), um clique marca
+export type ApresentacaoCampoCaptura = "menu" | "botoes";
+
+// Configuração de UM campo na barra de captura. A ordem da lista `campos` é a ordem na tela — é assim
+// que ela escolhe o que vem primeiro (o prazo, no layout que ela desenhou).
+export interface CampoCaptura {
+	// ID_STATUS, ID_DATA_ACAO ou id de propriedade customizada.
+	id: string;
+	apresentacao: ApresentacaoCampoCaptura;
+}
+
+// Configuração da área de captura da sidebar. Os campos viram controles fixos embaixo do input — o
+// ajuste fino. Os presets são o caminho de um clique. Ela pediu os dois.
+export interface ConfigCaptura {
+	// Desliga a área inteira (volta ao input simples de antes).
+	ativa: boolean;
+	// Formato NOVO: ordem + apresentação por campo. `camposVisiveis` (só os ids) é o formato antigo,
+	// mantido para migrar configs já salvas — ver migrarCamposDeGrupo.
+	campos?: CampoCaptura[];
+	camposVisiveis: string[];
+	presets: PresetCaptura[];
+	// Depois de capturar, os campos voltam ao valor vazio? Ligado = cada captura começa limpa;
+	// desligado = os valores escolhidos ficam grudados pra capturar várias parecidas em sequência.
+	limparAposCapturar: boolean;
+	// Carimbo de "os campos padrão já foram semeados neste grupo". Distingue "nunca semeado" (a
+	// primeira versão gravou a lista vazia em todo mundo → semeia) de "ela desmarcou todos de
+	// propósito" (respeita). Sem ele, os campos ressuscitariam a cada carga do plugin.
+	camposSemeados?: boolean;
+}
+
+export const CONFIG_CAPTURA_PADRAO: ConfigCaptura = {
+	ativa: true,
+	camposVisiveis: [],
+	presets: [],
+	limparAposCapturar: true,
+};
+
+// Presets de exemplo, gerados a partir dos STATUS REAIS do grupo — mesma razão de botoesAcaoPadrao:
+// um preset que gravasse "Fazer" num vault com outros nomes de status sujaria o frontmatter.
+export function presetsCapturaPadrao(status: ConfigStatus): PresetCaptura[] {
+	const comData = opcaoStatusComData(status);
+	const presets: PresetCaptura[] = [];
+
+	if (comData) {
+		presets.push(
+			{
+				id: "preset_captura_hoje",
+				nome: "Hoje",
+				visivel: true,
+				icone: "sun",
+				acoes: [
+					{ campo: ID_STATUS, modo: "fixo", valor: comData },
+					{ campo: ID_DATA_ACAO, modo: "hoje" },
+				],
+			},
+			{
+				id: "preset_captura_semana",
+				nome: "Em 7 dias",
+				visivel: true,
+				icone: "calendar-clock",
+				acoes: [
+					{ campo: ID_STATUS, modo: "fixo", valor: comData },
+					{ campo: ID_DATA_ACAO, modo: "dias", dias: 7 },
+				],
+			}
+		);
+	}
+
+	return presets;
+}
+
+// Campos que já nascem como pastilha na captura. Sem isso a barra de propriedades nasce VAZIA, e o
+// recurso parece quebrado até ela achar a tela de Configurações — foi exatamente o que aconteceu.
+//
+// Status e prazo entram sempre (são os dois campos que toda tarefa tem). Das propriedades
+// customizadas entram só as de SELEÇÃO, que têm opções cadastradas e viram um menu direto de
+// escolher; texto e link de arquivo exigem digitar/buscar, o que não é o gesto rápido da captura —
+// ela liga esses à mão se quiser.
+export function camposCapturaPadrao(propriedades: PropriedadeDefinida[]): CampoCaptura[] {
+	return [
+		// O prazo vem PRIMEIRO por pedido dela ("a primeira linha é de prazo"), e como botões: hoje,
+		// amanhã e escolher data ficam a um clique, que é o caso mais frequente da captura.
+		{ id: ID_DATA_ACAO, apresentacao: "botoes" },
+		{ id: ID_STATUS, apresentacao: "menu" },
+		...propriedades
+			.filter((p) => p.tipo === "selecao" || p.tipo === "link_arquivo")
+			.map((p): CampoCaptura => ({ id: p.id, apresentacao: "menu" })),
+	];
+}
+
+// Os campos da captura no formato novo, migrando na hora a config antiga (lista de ids). Fica aqui,
+// e não só na migração de carga, porque uma config salva por uma versão anterior pode chegar às views
+// antes de ser regravada — assim quem lê nunca precisa saber dos dois formatos.
+export function camposDaCaptura(captura: ConfigCaptura): CampoCaptura[] {
+	if (captura.campos) return captura.campos;
+	return (captura.camposVisiveis ?? []).map((id): CampoCaptura => ({ id, apresentacao: "menu" }));
+}
+
 export interface ConfigStatus {
 	rotulo: string;
 	// Chave técnica no frontmatter (default "status") — separada do rótulo exibido, mesmo padrão de
@@ -481,6 +599,12 @@ export interface ConfigEfetivaGrupo {
 	// embutidas, que ela só liga/desliga e renomeia.
 	botoesAcao: BotaoAcao[];
 	acoesFixas: Record<IdAcaoFixa, ConfigAcaoFixa>;
+	// Área de captura rápida da barra lateral (input + campos configuráveis + presets).
+	captura: ConfigCaptura;
+	// Visualização "Lista" do calendário: duas colunas, cada uma renderizando uma Visualização salva
+	// (ids de `visualizacoesSalvas`). Null = coluna vazia, com um aviso pedindo pra configurar.
+	calendarioListaColunaEsquerdaId: string | null;
+	calendarioListaColunaDireitaId: string | null;
 	// Campos derivados só-leitura, preenchidos por configDoGrupo, para o repositório carimbar o discriminador
 	// ao criar tarefas e resolver o pertencimento — não são persistidos (vêm do grupo + do topo global).
 	readonly __propriedadeGrupo?: string | null;
@@ -581,6 +705,7 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	recorrenciaAtiva: true,
 	calendarioMostrarDetalhes: true,
 	calendarioPropriedadesVisiveisPorModo: {
+		lista: [],
 		mes: [],
 		"semana-horarios": [],
 		"semana-kanban": [],
@@ -608,6 +733,11 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	// nomes de status.
 	botoesAcao: [],
 	acoesFixas: { ...ACOES_FIXAS_PADRAO },
+	// Presets vazios pelo mesmo motivo de botoesAcao: são semeados a partir dos status reais do grupo
+	// (ver presetsCapturaPadrao, chamada em migrarCamposDeGrupo e na criação de grupo).
+	captura: { ...CONFIG_CAPTURA_PADRAO, camposVisiveis: [], presets: [] },
+	calendarioListaColunaEsquerdaId: null,
+	calendarioListaColunaDireitaId: null,
 };
 
 export const CONFIGURACOES_PADRAO: ConfiguracoesGestorTarefas = {
@@ -721,6 +851,22 @@ export function migrarReferenciasPropriedade(grupo: GrupoTarefas, idAntigo: stri
 	};
 	for (const filtro of grupo.filtrosSalvos) migrarItem(filtro.raiz);
 	for (const view of grupo.visualizacoesSalvas) migrarItem(view.raiz);
+
+	// Os botões do clique direito e os presets de captura guardam o ID da propriedade em `campo`
+	// (ver AcaoBotao). Sem migrar aqui, renomear uma propriedade deixaria o botão gravando num campo
+	// que não existe mais — falha silenciosa, igual à dos filtros acima.
+	for (const botao of grupo.botoesAcao ?? []) {
+		for (const acao of botao.acoes) if (acao.campo === idAntigo) acao.campo = idNovo;
+	}
+	for (const preset of grupo.captura?.presets ?? []) {
+		for (const acao of preset.acoes) if (acao.campo === idAntigo) acao.campo = idNovo;
+	}
+	if (grupo.captura?.camposVisiveis) {
+		grupo.captura.camposVisiveis = grupo.captura.camposVisiveis.map((v) => (v === idAntigo ? idNovo : v));
+	}
+	if (grupo.captura?.campos) {
+		grupo.captura.campos = grupo.captura.campos.map((c) => (c.id === idAntigo ? { ...c, id: idNovo } : c));
+	}
 }
 
 export function ultimaOpcaoStatus(status: ConfigStatus): string | undefined {

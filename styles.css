@@ -153,6 +153,113 @@
 	min-width: 120px;
 }
 
+/* ---------- Área de captura da barra lateral ---------- */
+
+/* A sidebar é só captura: dois blocos empilhados (Inbox e demandas), sem lista de tarefas. */
+.mytasks-sidebar-captura {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+/* Cada bloco na ordem do print: título → campo → pastilhas → presets. */
+.mytasks-area-captura {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+/* A pastilha de título ("inbox" com ícone, "demandas"): mesma casca do toggle que existia antes,
+   mas sem ser botão — desde que a lista saiu da sidebar não há mais o que alternar. */
+.mytasks-captura-titulo {
+	display: inline-flex;
+	align-items: center;
+	align-self: flex-start;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 8px;
+	background: var(--background-modifier-border);
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.mytasks-captura-titulo-icone {
+	display: inline-flex;
+	align-items: center;
+}
+
+.mytasks-captura-titulo-icone svg {
+	width: 14px;
+	height: 14px;
+}
+
+.mytasks-captura-linha {
+	display: flex;
+}
+
+.mytasks-captura-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+/* Uma linha por campo: com a apresentação em "botões", as opções de um campo precisam ficar juntas e
+   separadas das do campo seguinte — senão status e etiqueta viram uma sopa de pastilhas sem dizer
+   qual é de quê. */
+.mytasks-captura-campos {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.mytasks-captura-linha-campo {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+/* !important porque esta classe também esconde o CORPO de um acordeão na aba de Configurações,
+   onde regras do app/tema com mais especificidade dariam `display` de volta ao container. */
+.mytasks-oculto {
+	display: none !important;
+}
+
+/* As pastilhas de campo/preset são menores que os seletores do cabeçalho: numa sidebar estreita
+   cabem várias por linha, e a captura não deve empurrar a lista pra baixo da dobra. */
+.mytasks-captura-campo,
+.mytasks-captura-preset {
+	height: auto !important;
+	padding: 3px 8px !important;
+	font-size: 0.78em !important;
+	border-radius: 6px !important;
+	cursor: pointer;
+}
+
+/* Campo com valor escolhido acende, pra ela ver num relance o que vai ser gravado antes do Enter. */
+.mytasks-captura-campo-preenchido {
+	background: var(--interactive-accent) !important;
+	color: var(--text-on-accent) !important;
+}
+
+.mytasks-captura-campo .mytasks-seletor-discreto-texto {
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mytasks-captura-preset svg {
+	width: 12px;
+	height: 12px;
+}
+
+.mytasks-captura-data,
+.mytasks-captura-busca {
+	width: 100%;
+	font-size: 0.85em;
+}
+
 .mytasks-lista-cabecalho-grupo {
 	font-size: 0.8em;
 	font-weight: 600;
@@ -751,6 +858,42 @@
 	   esta regra é que define a espessura (e portanto as medidas) que a variante preserva. */
 	border: 1px solid var(--gt-borda-fraca);
 	border-radius: var(--gt-raio);
+}
+
+/* ---------- Modo "Lista" do calendário: duas colunas de Visualizações salvas ---------- */
+
+.mytasks-calendario-lista {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	padding: 12px;
+	align-items: start;
+}
+
+/* Numa aba estreita (ou na sidebar) duas colunas viram tiras ilegíveis — abaixo desta largura as
+   colunas empilham. Container query não é usada de propósito: o suporte varia com a versão do
+   Electron do Obsidian, e a largura do painel aqui acompanha a da janela na prática. */
+@media (max-width: 700px) {
+	.mytasks-calendario-lista {
+		grid-template-columns: 1fr;
+	}
+}
+
+.mytasks-calendario-lista-coluna {
+	min-width: 0;
+}
+
+.mytasks-calendario-lista-titulo {
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--text-muted);
+	margin-bottom: 8px;
+}
+
+/* O MotorLista desenha o próprio cabeçalho (vazio aqui, já que os seletores estão desligados) —
+   sem isso ele reservaria uma faixa em branco acima de cada coluna. */
+.mytasks-calendario-lista-coluna .mytasks-cabecalho:empty {
+	display: none;
 }
 
 /* Em todas as views, preserva a espessura da moldura (e portanto todas as medidas), mas deixa as
@@ -1393,6 +1536,162 @@
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
 	margin: 18px 0;
+}
+
+/* Botão de ação sem a moldura de `.setting-item` em volta — usado quando não há rótulo à esquerda
+   que justifique a linha de configuração inteira (ex: "+ Novo filtro"). */
+.mytasks-botao-solto {
+	margin-top: 12px;
+}
+
+/* ---------- Blocos sem moldura nas Configurações ----------
+   Pedido dela: nada de retângulo em volta de bloco — só uma linha divisória separando um do outro.
+   O tema (Minimal) desenha cada `.setting-item` como um cartão com fundo, borda e cantos curvos;
+   aqui isso vira uma linha só. Escopado a `.mytasks-config`, pra não mexer nas Configurações de
+   outros plugins. */
+.mytasks-config .setting-item {
+	background: transparent !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	border-bottom: 1px solid var(--background-modifier-border) !important;
+	padding: 10px 4px !important;
+	margin: 0 !important;
+}
+
+/* A última linha de um bloco não desenha divisória: quem separa dali pra baixo é a borda do
+   acordeão (ou o fim da seção), e as duas juntas viram um traço duplo. */
+.mytasks-config .setting-item:last-child {
+	border-bottom: none !important;
+}
+
+/* O construtor de filtro também era um cartão fechado. Vira um bloco recuado, marcado só pela
+   linha à esquerda — mantém a leitura de "isto pertence ao filtro" sem a caixa. */
+.mytasks-config .mytasks-construtor-filtro-card,
+.mytasks-modal-cards .mytasks-construtor-filtro-card {
+	background: transparent !important;
+	border: none !important;
+	border-left: 2px solid var(--background-modifier-border) !important;
+	border-radius: 0 !important;
+	padding: 4px 0 4px 12px !important;
+}
+
+/* Cada ação/condição dentro de um bloco: mesma ideia — linha embaixo em vez de caixa. */
+.mytasks-config .mytasks-acao-botao-card {
+	border: none !important;
+	border-bottom: 1px solid var(--background-modifier-border) !important;
+	border-radius: 0 !important;
+	padding: 0 !important;
+}
+
+/* ---------- Acordeões das Configurações (estilo Style Settings) ---------- */
+
+.mytasks-acordeao {
+	display: block;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--background-modifier-border);
+	text-align: left;
+}
+
+/* O cabeçalho é <button> (foco por teclado), então precisa perder toda a aparência de botão.
+   O !important é necessário: o tema/app estiliza `button` dentro da aba de Configurações com
+   regras mais específicas que estas — sem forçar, o texto sai centralizado e o bloco ganha
+   margem automática, que era o desalinhamento em escada que ela viu. */
+.mytasks-acordeao-cabecalho {
+	display: flex !important;
+	align-items: flex-start !important;
+	justify-content: flex-start !important;
+	gap: 8px;
+	width: 100% !important;
+	max-width: none !important;
+	margin: 0 !important;
+	padding: 12px 4px !important;
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	border-radius: 0 !important;
+	cursor: pointer;
+	text-align: left !important;
+	font-size: var(--font-ui-small);
+	line-height: 1.4;
+	color: var(--text-normal);
+	white-space: normal;
+	height: auto !important;
+}
+
+.mytasks-acordeao-cabecalho:hover {
+	background: var(--background-modifier-hover) !important;
+}
+
+/* A descrição é filha do cabeçalho (<button>), e o alinhamento centralizado do botão vazava
+   pra ela também. */
+.mytasks-acordeao-textos,
+.mytasks-acordeao-titulo,
+.mytasks-acordeao-descricao {
+	text-align: left !important;
+}
+
+.mytasks-acordeao-seta {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	/* Alinha a seta com a primeira linha do título, não com o bloco inteiro (que pode ter descrição). */
+	margin-top: 2px;
+	color: var(--text-muted);
+	transition: transform 0.12s ease;
+}
+
+.mytasks-acordeao-aberto > .mytasks-acordeao-cabecalho .mytasks-acordeao-seta {
+	transform: rotate(90deg);
+}
+
+.mytasks-acordeao-seta svg {
+	width: 14px;
+	height: 14px;
+}
+
+.mytasks-acordeao-textos {
+	min-width: 0;
+}
+
+.mytasks-acordeao-titulo {
+	font-weight: 600;
+}
+
+.mytasks-acordeao-descricao {
+	margin-top: 2px;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	white-space: normal;
+}
+
+/* O recuo à esquerda é o que dá a leitura de "dentro de": o conteúdo fica alinhado com o título,
+   depois da seta. O respiro no topo é necessário porque o primeiro item pode ter moldura própria
+   (o cartão do Minimal, por exemplo) — sem ele a borda de cima encosta no cabeçalho e parece cortada. */
+.mytasks-acordeao-corpo {
+	padding: 8px 4px 12px 22px;
+}
+
+/* Nível aninhado: título menor e sem a linha de baixo do último, pra não empilhar dois traços
+   quando o acordeão de dentro fecha o de fora. */
+.mytasks-acordeao-aninhado > .mytasks-acordeao-cabecalho .mytasks-acordeao-titulo {
+	font-size: 0.95em;
+}
+
+.mytasks-acordeao-corpo > .mytasks-acordeao:last-child {
+	border-bottom: none;
+}
+
+/* Dentro de um acordeão as linhas de configuração não precisam da borda de topo do Obsidian —
+   a moldura já é o próprio acordeão. O padding do topo vem do -corpo, não daqui: somar os dois
+   afastaria demais a primeira linha. */
+.mytasks-acordeao-corpo > .setting-item:first-child {
+	border-top: none;
+	padding-top: 0;
 }
 
 /* Cabeçalho ao entrar na configuração de um grupo: "‹ Grupos" + nome do grupo. */
