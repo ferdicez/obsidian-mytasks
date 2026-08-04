@@ -510,6 +510,21 @@ export interface ChavesFixas {
 	proximaOcorrencia: string;
 }
 
+// Nomes EXIBIDOS dos três campos de comportamento — os rótulos que aparecem na captura e nas telas.
+// Separados de ChavesFixas pelo mesmo motivo que status/prazo separam rotulo de chave: renomear o que
+// se lê na tela não pode mexer no que está gravado no frontmatter das notas.
+export interface RotulosFixos {
+	recorrencia: string;
+	antecedencia: string;
+	manterHistorico: string;
+}
+
+export const ROTULOS_FIXOS_PADRAO: RotulosFixos = {
+	recorrencia: "Recorrência",
+	antecedencia: "Avisar antes",
+	manterHistorico: "Histórico",
+};
+
 export const CHAVES_FIXAS_PADRAO: ChavesFixas = {
 	horario: "horario",
 	recorrencia: "recorrencia",
@@ -639,6 +654,9 @@ export interface ConfigEfetivaGrupo {
 	// Chaves técnicas dos campos fixos (fora status/prazo, que têm seu próprio par rotulo/chave) — ver
 	// ChavesFixas. Renomeável em Configurações → Avançado, com migração automática no vault.
 	chavesFixas: ChavesFixas;
+	// Nomes exibidos dos três campos de comportamento (recorrência, antecedência, histórico). Ausente
+	// em configs salvas antes desta versão — quem lê usa `rotuloFixo()`, que cai no padrão.
+	rotulosFixos?: RotulosFixos;
 	// Menu do clique direito no cartão: os botões que a usuária monta (ver BotaoAcao) e as três ações
 	// embutidas, que ela só liga/desliga e renomeia.
 	botoesAcao: BotaoAcao[];
@@ -772,6 +790,7 @@ export const GRUPO_PADRAO: GrupoTarefas = {
 	filtroPadraoListaId: null,
 	templateNota: { ...TEMPLATE_NOTA_PADRAO },
 	chavesFixas: { ...CHAVES_FIXAS_PADRAO },
+	rotulosFixos: { ...ROTULOS_FIXOS_PADRAO },
 	// Vazio na constante: os botões de exemplo são gerados a partir dos status REAIS do grupo, o que
 	// só dá pra fazer quando o grupo existe (ver botoesAcaoPadrao, chamada em migrarCamposDeGrupo e
 	// na criação de grupo). Uma lista literal aqui gravaria "Fazer"/"Inbox" em vaults que usam outros
@@ -931,6 +950,13 @@ export function opcaoStatusComData(status: ConfigStatus): string | undefined {
 // Status com que uma tarefa capturada nasce quando NADA foi escolhido na tela. O "Status inicial das
 // capturas" (Configurações → Captura) vence; sem ele — ou apontando pra uma opção que foi renomeada/
 // apagada — cai na regra posicional de sempre, que é o comportamento anterior byte a byte.
+// Nome exibido de um dos três campos de comportamento. Config salva antes desta versão não tem
+// `rotulosFixos`, e um campo deixado em branco também cai no padrão — a captura nunca mostra pastilha
+// sem nome.
+export function rotuloFixo(config: ConfigEfetivaGrupo, campo: keyof RotulosFixos): string {
+	return config.rotulosFixos?.[campo]?.trim() || ROTULOS_FIXOS_PADRAO[campo];
+}
+
 export function statusInicialDaCaptura(config: ConfigEfetivaGrupo, temData: boolean): string {
 	const padrao = config.captura?.statusPadrao;
 	if (padrao && config.status.opcoes.some((o) => o.valor === padrao)) return padrao;

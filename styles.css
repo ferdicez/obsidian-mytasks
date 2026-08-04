@@ -219,6 +219,33 @@
 .mytasks-captura-linha {
 	display: flex;
 	align-items: center;
+	gap: 4px;
+}
+
+/* Botão "+" no canto direito do campo de demandas (o Inbox não tem: lá o Enter é o único caminho).
+   Quadrado, com a MESMA altura do input ao lado — a do input é fixa em 30px pelo mesmo motivo. */
+.mytasks-captura-adicionar {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border-radius: var(--gt-raio, 6px);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.mytasks-captura-adicionar:hover {
+	background: var(--interactive-accent-hover, var(--interactive-accent));
+}
+
+.mytasks-captura-adicionar svg {
+	width: 16px;
+	height: 16px;
 }
 
 .mytasks-captura-presets {
@@ -376,25 +403,58 @@
    pintando — os dois disputam o mesmo fundo.
 
    A cor NÃO vai no item inteiro: ela passaria por baixo do checkbox e apagaria a bolinha de marcar.
-   Quem recebe o fundo é o conteúdo (.mytasks-info), que começa depois do checkbox. As margens
-   negativas devolvem o padding/gap do cartão, pra faixa encostar nas bordas de cima, baixo e
-   direita — só a esquerda para antes do checkbox. */
+   Mas também NÃO pode ser o fundo do .mytasks-info: o ícone de recorrência é IRMÃO dele, não filho,
+   e como o .mytasks-info é `flex: 1` ele PARA onde o ícone começa — a faixa terminava mais cedo nas
+   tarefas com recorrência do que nas sem, que foi exatamente o que ela apontou.
+
+   A faixa é um pseudo-elemento ANCORADO no .mytasks-info (um div comum, ao contrário do checkbox,
+   onde pseudo-elemento não é confiável): começa na borda esquerda dele e se estica até a borda
+   direita do CARTÃO, passando por baixo do ícone. Assim ela termina sempre no mesmo lugar, com
+   ícone ou sem, e a largura do checkbox nunca precisa ser adivinhada — o layout é quem mede. */
 .mytasks-item-fundo-destaque {
 	border-radius: 6px;
+	position: relative;
 }
 
 .mytasks-item-fundo-destaque > .mytasks-info {
-	background-color: var(--mytasks-cor-fundo);
-	margin: calc(-1 * var(--mytasks-item-padding-y)) calc(-1 * var(--mytasks-item-padding-x))
-		calc(-1 * var(--mytasks-item-padding-y)) 0;
-	padding: var(--mytasks-item-padding-y) var(--mytasks-item-padding-x);
-	border-radius: 6px;
+	position: relative;
 }
 
-/* Sem checkbox (ex.: cartões só-leitura), o conteúdo é o cartão inteiro: a faixa volta a ocupar
-   toda a largura, senão sobraria uma tira sem cor à esquerda. */
-.mytasks-item-fundo-destaque > .mytasks-info:first-child {
-	margin-left: calc(-1 * var(--mytasks-item-padding-x));
+.mytasks-item-fundo-destaque > .mytasks-info::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	/* Estica até a borda direita do cartão: o que sobra à direita do .mytasks-info é o ícone (quando
+	   existe) mais o padding lateral. `100%` aqui é a largura do próprio .mytasks-info, então o
+	   deslocamento é medido a partir da borda direita DELE — por isso o valor é negativo. */
+	right: calc(-1 * var(--mytasks-item-padding-x));
+	top: calc(-1 * var(--mytasks-item-padding-y));
+	bottom: calc(-1 * var(--mytasks-item-padding-y));
+	background-color: var(--mytasks-cor-fundo);
+	border-radius: 6px;
+	/* Fica em 0 e o conteúdo sobe pra 1 (regra abaixo). Um z-index NEGATIVO seria o caminho óbvio,
+	   mas some atrás do fundo assim que qualquer ancestral criar contexto de empilhamento — e o
+	   cartão vive dentro de listas com transform/opacity durante o arrasto. */
+	z-index: 0;
+	pointer-events: none;
+}
+
+/* O texto do cartão por cima da faixa. */
+.mytasks-item-fundo-destaque > .mytasks-info > * {
+	position: relative;
+	z-index: 1;
+}
+
+/* O ícone precisa ficar por cima da faixa, que passa por baixo dele. */
+.mytasks-item-fundo-destaque > .mytasks-icone-recorrencia {
+	position: relative;
+	z-index: 1;
+}
+
+/* Cartão sem checkbox (só-leitura): não há coluna nenhuma a preservar à esquerda, e o .mytasks-info
+   já ocupa o cartão inteiro — a faixa vira o fundo do item, sem pseudo-elemento. */
+.mytasks-item-fundo-destaque > .mytasks-info:first-child::before {
+	left: calc(-1 * var(--mytasks-item-padding-x));
 }
 
 /* Lembrete antecipado: a tarefa está aparecendo num dia que NÃO é o do prazo (só quando

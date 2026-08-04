@@ -17,6 +17,7 @@ import {
 	RECORRENCIA_LABELS,
 	Recorrencia,
 	camposDaCaptura,
+	rotuloFixo,
 } from "./tipos";
 import { RepositorioTarefas, formatarData } from "./repositorio-tarefas";
 import { SugestorArquivos } from "./sugestor-arquivos";
@@ -105,6 +106,20 @@ export class AreaCaptura {
 			void this.capturar();
 		});
 
+		// Botão de adicionar no canto direito do campo. Só aqui, no bloco de demandas: o Inbox continua
+		// só com Enter (é outro caminho de código — MotorLista.desenharCapturaRapida). `mousedown` com
+		// preventDefault em vez de `click` porque o clique tira o foco do input antes de disparar, e um
+		// campo de valor em edição (busca de arquivo, texto livre) fecharia sem ter gravado.
+		const botaoAdicionar = linhaInput.createEl("button", {
+			cls: "mytasks-captura-adicionar",
+			attr: { "aria-label": "Adicionar tarefa" },
+		});
+		setIcon(botaoAdicionar, "plus");
+		botaoAdicionar.addEventListener("mousedown", (evento) => {
+			evento.preventDefault();
+			void this.capturar();
+		});
+
 		if (this.opcoes.mostrarCampos === false) return;
 
 		this.areaCampos = this.containerEl.createDiv({ cls: "mytasks-captura-campos" });
@@ -137,15 +152,15 @@ export class AreaCaptura {
 			// Recorrência só aparece se o recurso estiver ligado no grupo — mesma regra que já esconde o
 			// campo do modal de editar tarefa e da nota (ver campoVisivelNaNota).
 			if (campo.id === ID_RECORRENCIA_ACAO) {
-				if (cfg.recorrenciaAtiva) resultado.push({ ...campo, rotulo: "Recorrência" });
+				if (cfg.recorrenciaAtiva) resultado.push({ ...campo, rotulo: rotuloFixo(cfg, "recorrencia") });
 				continue;
 			}
 			if (campo.id === ID_ANTECEDENCIA_ACAO) {
-				resultado.push({ ...campo, rotulo: "Avisar antes" });
+				resultado.push({ ...campo, rotulo: rotuloFixo(cfg, "antecedencia") });
 				continue;
 			}
 			if (campo.id === ID_MANTER_HISTORICO_ACAO) {
-				resultado.push({ ...campo, rotulo: "Histórico" });
+				resultado.push({ ...campo, rotulo: rotuloFixo(cfg, "manterHistorico") });
 				continue;
 			}
 			// Uma propriedade removida em Configurações depois de ter sido posta na captura simplesmente

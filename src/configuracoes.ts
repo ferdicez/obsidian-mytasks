@@ -34,6 +34,9 @@ import {
 	ID_MANTER_HISTORICO_ACAO,
 	ID_RECORRENCIA_ACAO,
 	IDS_CAMPOS_COMPORTAMENTO,
+	ROTULOS_FIXOS_PADRAO,
+	RotulosFixos,
+	rotuloFixo,
 	campoEhOpcional,
 	campoPodeSerOpcional,
 	campoVisivelNaNota,
@@ -715,8 +718,57 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				});
 			});
 
+		// Nomes exibidos dos três campos de comportamento. Ao contrário do prazo acima, aqui o rótulo NÃO
+		// mexe na chave do frontmatter (essa fica em "Chaves técnicas", logo abaixo): renomear é só troca
+		// de etiqueta na tela, sem tocar em nota nenhuma. Por isso grava direto, sem confirmação.
+		this.renderizarRotuloFixo(
+			containerEl,
+			"recorrencia",
+			"Nome do campo de recorrência",
+			"Como aparece na captura e nas telas. Não altera o frontmatter das notas."
+		);
+		this.renderizarRotuloFixo(
+			containerEl,
+			"antecedencia",
+			"Nome do campo de antecedência",
+			'O aviso de "avisar com antecedência". Não altera o frontmatter das notas.'
+		);
+		this.renderizarRotuloFixo(
+			containerEl,
+			"manterHistorico",
+			"Nome do campo de histórico",
+			'O "manter registro ao concluir". Não altera o frontmatter das notas.'
+		);
+
 		// As chaves técnicas do frontmatter, que antes eram a página "Avançado".
 		this.renderizarChavesFixas(containerEl);
+	}
+
+	private renderizarRotuloFixo(
+		container: HTMLElement,
+		campo: keyof RotulosFixos,
+		titulo: string,
+		descricao: string
+	): void {
+		if (!this.grupo.rotulosFixos) this.grupo.rotulosFixos = { ...ROTULOS_FIXOS_PADRAO };
+		const rotulos = this.grupo.rotulosFixos;
+
+		new Setting(container)
+			.setName(titulo)
+			.setDesc(descricao)
+			.addText((text) => {
+				text.setPlaceholder(ROTULOS_FIXOS_PADRAO[campo]);
+				text.setValue(rotulos[campo] ?? "");
+				// Grava no BLUR: a cada tecla, o redesenho da tela tiraria o foco do campo.
+				text.inputEl.addEventListener("blur", async () => {
+					// Campo esvaziado volta ao padrão em vez de virar pastilha sem nome (ver rotuloFixo).
+					const novo = text.inputEl.value.trim() || ROTULOS_FIXOS_PADRAO[campo];
+					if (novo === rotulos[campo]) return;
+					rotulos[campo] = novo;
+					text.setValue(novo);
+					await this.plugin.salvarConfiguracoes();
+				});
+			});
 	}
 
 	private renderizarSecaoPropriedades(containerEl: HTMLElement): void {
@@ -1071,9 +1123,11 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		const oferecidos: { id: string; rotulo: string; tipo?: string }[] = [
 			{ id: ID_DATA_ACAO, rotulo: this.grupo.dataTarefa.rotulo || "Prazo" },
 			{ id: ID_STATUS, rotulo: this.grupo.status.rotulo || "Status" },
-			...(this.grupo.recorrenciaAtiva ? [{ id: ID_RECORRENCIA_ACAO, rotulo: "Recorrência" }] : []),
-			{ id: ID_ANTECEDENCIA_ACAO, rotulo: "Avisar com antecedência" },
-			{ id: ID_MANTER_HISTORICO_ACAO, rotulo: "Manter no histórico" },
+			...(this.grupo.recorrenciaAtiva
+				? [{ id: ID_RECORRENCIA_ACAO, rotulo: rotuloFixo(this.configEfetiva, "recorrencia") }]
+				: []),
+			{ id: ID_ANTECEDENCIA_ACAO, rotulo: rotuloFixo(this.configEfetiva, "antecedencia") },
+			{ id: ID_MANTER_HISTORICO_ACAO, rotulo: rotuloFixo(this.configEfetiva, "manterHistorico") },
 			...this.grupo.propriedades.map((p) => ({ id: p.id, rotulo: p.rotulo, tipo: p.tipo as string })),
 		];
 
