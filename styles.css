@@ -10,35 +10,46 @@
 	padding: 8px 12px;
 }
 
+/* ── Abas do painel de configurações ─────────────────────────────────────────────────────
+ *
+ * O padrão do vault (ver plugins/_docs/painel-de-configuracoes.md): aba SUBLINHADA, no vocabulário
+ * do próprio Obsidian — a mesma linha embaixo da ativa que ele usa nas abas de nota. Eram pílulas
+ * com fundo aqui; virou sublinhado para os painéis de todos os plugins falarem a mesma língua.
+ *
+ * A linha da ativa é `box-shadow: inset`, e não `border-bottom`: uma borda somaria 1px à altura e
+ * faria as abas dançarem a cada troca. */
 .mytasks-config-abas {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
-	margin-bottom: 16px;
-	padding-bottom: 12px;
+	gap: 0.2em;
+	margin-bottom: 1em;
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .mytasks-config-aba {
-	padding: 6px 14px;
-	background: var(--background-secondary);
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	padding: 0.55em 0.9em;
+	background: transparent;
 	border: none;
-	box-shadow: none;
-	border-radius: 8px;
-	font-size: 0.85em;
-	font-weight: 500;
-	color: var(--text-normal);
+	border-radius: 0;
+	box-shadow: inset 0 -2px 0 transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
 	cursor: pointer;
 }
 
 .mytasks-config-aba:hover {
 	background: var(--background-modifier-hover);
+	color: var(--text-normal);
 }
 
 .mytasks-config-aba-ativa,
 .mytasks-config-aba-ativa:hover {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
+	background: transparent;
+	color: var(--text-normal);
+	box-shadow: inset 0 -2px 0 var(--interactive-accent);
 }
 
 .mytasks-cabecalho {
