@@ -11,6 +11,10 @@ export interface OpcoesAcordeao {
 	chave: string;
 	titulo: string;
 	descricao?: string;
+	// Texto curto à direita do título (ex.: "3 status"). Serve pra ela saber o que tem dentro sem
+	// abrir a seção — e por isso diz "3 status", não só "3": um número solto ao lado de um título
+	// obriga a adivinhar do que ele é.
+	resumo?: string;
 	// Começa aberto na PRIMEIRA vez que aparece (depois disso vale o que ela deixou).
 	abertoPorPadrao?: boolean;
 	// Acordeão aninhado: recua e afina o título, pro nível de dentro não competir com o de fora.
@@ -48,6 +52,11 @@ export function criarAcordeao(container: HTMLElement, opcoes: OpcoesAcordeao): A
 	textos.createSpan({ cls: "mytasks-acordeao-titulo", text: opcoes.titulo });
 	if (opcoes.descricao) {
 		textos.createDiv({ cls: "mytasks-acordeao-descricao", text: opcoes.descricao });
+	}
+	// Filho do CABEÇALHO, não do bloco de textos: o cabeçalho é o flex que tem a largura toda, então
+	// é ali que o resumo consegue ser empurrado pra ponta direita (ver .mytasks-acordeao-resumo).
+	if (opcoes.resumo) {
+		cabecalho.createSpan({ cls: "mytasks-acordeao-resumo", text: opcoes.resumo });
 	}
 
 	const corpo = secao.createDiv({ cls: "mytasks-acordeao-corpo" });

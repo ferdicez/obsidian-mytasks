@@ -62,6 +62,16 @@ import { ModalEditarPresetCaptura } from "./modal-editar-preset-captura";
 import { abrirAcordeao, criarAcordeao, limparEstadoAcordeoes } from "./acordeao";
 import { ConstrutorFiltro } from "./construtor-filtro";
 
+// Resumo de contagem pro cabeçalho de um acordeão que lista coisas ("3 status", "1 preset",
+// "nenhum"). Com a PALAVRA junto, não só o número: um "3" solto ao lado do título obriga a adivinhar
+// do que ele é. O plural é parâmetro porque o português não fecha em "+s" sempre ("status" é
+// invariável, "visualizações" muda a terminação).
+function resumoContagem(quantidade: number, singular: string, plural: string): string {
+	if (quantidade === 0) return "nenhum";
+	if (quantidade === 1) return `1 ${singular}`;
+	return `${quantidade} ${plural}`;
+}
+
 // Id de um filtro salvo criado direto na página (sem modal).
 function gerarIdFiltro(): string {
 	if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -122,7 +132,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		// classe, as regras atingiriam as Configurações de outros plugins também.
 		containerEl.addClass("mytasks-config");
 
-		containerEl.createEl("h2", { text: "My Tasks — Configurações" });
+		// Sem título "My Tasks — Configurações" no topo: o Obsidian já escreve o nome do plugin no
+		// cabeçalho da janela de Configurações, e repetir gastava uma linha inteira de tela.
 
 		// Sem grupo selecionado para edição: mostra a tela de grupos (discriminador global + lista de grupos).
 		// Ao entrar num grupo, mostra as 5 páginas de sempre, escopadas a ele.
@@ -158,7 +169,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		containerEl.createEl("h3", { text: "Grupos de tarefas" });
 		containerEl.createEl("p", {
 			text: "Cada grupo é uma configuração independente (pasta, status, propriedades, visualizações). Uma tarefa pertence ao grupo cujo valor bate com a propriedade abaixo.",
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
 
 		new Setting(containerEl)
@@ -306,7 +317,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		// Sem hr/h3 próprios: o título vem do acordeão que envolve esta seção (ver renderizarPaginaCalendario).
 		containerEl.createEl("p", {
 			text: `Mostra os compromissos do Google Agenda no calendário de "${grupo.nome}", junto das tarefas deste grupo. Só leitura: nada é criado, editado ou apagado na sua agenda.`,
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
 
 		new Setting(containerEl)
@@ -333,6 +344,13 @@ export class AbaConfiguracoes extends PluginSettingTab {
 					await this.plugin.salvarConfiguracoes();
 				})
 			);
+
+		if (grupo.calendariosExternos.length === 0) {
+			containerEl.createEl("p", {
+				text: "Nenhuma agenda cadastrada ainda. Adicione a primeira abaixo.",
+				cls: "mytasks-config-vazio",
+			});
+		}
 
 		for (const calendario of grupo.calendariosExternos) {
 			const linha = new Setting(containerEl);
@@ -413,7 +431,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			btn.setButtonText("+ Adicionar agenda do Google").onClick(() => this.abrirEdicaoCalendarioExterno(null))
 		);
 
-		const ajuda = containerEl.createEl("p", { cls: "setting-item-description" });
+		const ajuda = containerEl.createEl("p", { cls: "mytasks-config-nota" });
 		ajuda.createEl("strong", { text: "Onde achar a URL: " });
 		ajuda.appendText(
 			"no Google Agenda, abra as configurações da agenda desejada → \"Integrar agenda\" → copie o \"Endereço secreto em formato iCal\". Esse endereço dá acesso de leitura à sua agenda para quem o tiver, então não compartilhe. Ele fica salvo apenas neste computador."
@@ -492,15 +510,19 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			descricao: "Pastas, lembrete, antecipação de pendências e recorrência.",
 		}).sePreenchido((corpo) => this.renderizarConfiguracoesGerais(corpo));
 
+		// As seções que LISTAM coisas ganham a contagem no cabeçalho: dá pra saber quantos status,
+		// propriedades, botões e visualizações existem sem abrir uma por uma.
 		criarAcordeao(containerEl, {
 			chave: "geral/status",
 			titulo: "Status",
+			resumo: resumoContagem(this.grupo.status.opcoes.length, "status", "status"),
 		}).sePreenchido((corpo) => this.renderizarSecaoStatus(corpo));
 
 		criarAcordeao(containerEl, {
 			chave: "geral/propriedades",
 			titulo: "Propriedades customizadas",
 			descricao: "Crie os campos que fizerem sentido para o seu fluxo (ex: Cliente, Projeto, Prioridade).",
+			resumo: resumoContagem(this.grupo.propriedades.length, "propriedade", "propriedades"),
 		}).sePreenchido((corpo) => this.renderizarSecaoPropriedades(corpo));
 
 		criarAcordeao(containerEl, {
@@ -513,12 +535,16 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			chave: "geral/menu-clique-direito",
 			titulo: "Menu do clique direito",
 			descricao: "Botões que aparecem ao clicar com o botão direito em cima de uma tarefa.",
+			// Conta só os botões criados por ela — as ações prontas são fixas e estão sempre lá, então
+			// somá-las faria o número parecer maior do que o trabalho que ela teve.
+			resumo: resumoContagem(this.grupo.botoesAcao.length, "botão", "botões"),
 		}).sePreenchido((corpo) => this.renderizarSecaoBotoesAcao(corpo));
 
 		criarAcordeao(containerEl, {
 			chave: "geral/visualizacoes",
 			titulo: "Visualizações salvas",
 			descricao: "Visualizações reutilizáveis (filtro + agrupamento) para usar em abas ou embutir em notas.",
+			resumo: resumoContagem(this.grupo.visualizacoesSalvas.length, "visualização", "visualizações"),
 		}).sePreenchido((corpo) => this.renderizarSecaoVisualizacoes(corpo));
 	}
 
@@ -801,6 +827,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			chave: "calendario/externos",
 			titulo: "Agendas externas",
 			descricao: "Calendários do Google (ou outros) exibidos junto das tarefas deste grupo.",
+			resumo: resumoContagem(this.grupo.calendariosExternos?.length ?? 0, "agenda", "agendas"),
 		}).sePreenchido((corpo) => this.renderizarCalendariosExternos(corpo));
 	}
 
@@ -846,14 +873,14 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		// Sem h3 próprio: o título vem do acordeão que envolve esta seção (ver renderizarPaginaCalendario).
 		containerEl.createEl("p", {
 			text: "A primeira aba do calendário mostra duas colunas lado a lado. Escolha abaixo qual Visualização salva aparece em cada uma.",
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
 
 		const visualizacoes = this.grupo.visualizacoesSalvas;
 		if (visualizacoes.length === 0) {
 			containerEl.createEl("p", {
 				text: 'Nenhuma Visualização salva ainda. Crie uma em Geral → "Visualizações salvas" para poder usá-la aqui.',
-				cls: "setting-item-description",
+				cls: "mytasks-config-vazio",
 			});
 			return;
 		}
@@ -1036,7 +1063,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	private renderizarSecaoPresets(containerEl: HTMLElement): void {
 		containerEl.createEl("p", {
 			text: "O preset vence o que estiver marcado nas pastilhas dos campos.",
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
 
 		const listaPresets = containerEl.createDiv();
@@ -1185,8 +1212,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		const presets = this.grupo.captura.presets;
 		if (presets.length === 0) {
 			container.createEl("p", {
-				text: "Nenhum preset. A captura continua funcionando pelo Enter, usando as pastilhas acima.",
-				cls: "setting-item-description",
+				text: "Nenhum preset ainda. A captura continua funcionando pelo Enter, usando as pastilhas acima.",
+				cls: "mytasks-config-vazio",
 			});
 			return;
 		}
@@ -1276,12 +1303,16 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			titulo: "Campos da captura",
 			descricao:
 				'Aparecem embaixo do campo de texto, na ordem definida aqui. "Lista suspensa" mostra uma pastilha só; "Botões" mostra todas as opções na tela.',
+			// Conta os campos LIGADOS (os que a captura mostra), não os oferecidos: a lista dentro da
+			// seção traz os desligados também, mas quem interessa saber de fora é quantos aparecem.
+			resumo: resumoContagem(camposDaCaptura(this.grupo.captura).length, "campo", "campos"),
 		}).sePreenchido((corpo) => this.renderizarCamposDaCaptura(corpo.createDiv()));
 
 		criarAcordeao(containerEl, {
 			chave: "captura/presets",
 			titulo: "Presets",
 			descricao: "Botões de um clique: digite o título e clique no preset para criar a tarefa já com os valores dele.",
+			resumo: resumoContagem(this.grupo.captura.presets.length, "preset", "presets"),
 		}).sePreenchido((corpo) => this.renderizarSecaoPresets(corpo));
 	}
 
@@ -1634,8 +1665,17 @@ export class AbaConfiguracoes extends PluginSettingTab {
 	private renderizarPaginaFiltros(containerEl: HTMLElement): void {
 		containerEl.createEl("p", {
 			text: "Filtros pré-configurados, escolhíveis direto na barrinha de Filtro da Lista e do Kanban (sidebar e aba de tela cheia). Diferente das Visualizações salvas, que servem para embutir em notas.",
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
+
+		// Sem filtros a página ficava só com o botão "+ Novo filtro" solto embaixo da nota, sem dizer
+		// que a lista está vazia (e não que ela deixou de carregar).
+		if (this.grupo.filtrosSalvos.length === 0) {
+			containerEl.createEl("p", {
+				text: "Nenhum filtro salvo ainda. Crie o primeiro abaixo.",
+				cls: "mytasks-config-vazio",
+			});
+		}
 
 		for (const filtro of this.grupo.filtrosSalvos) {
 			this.renderizarItemFiltro(containerEl, filtro);
@@ -1664,6 +1704,9 @@ export class AbaConfiguracoes extends PluginSettingTab {
 			// qual acordeão estava aberto.
 			chave: `filtros/${filtro.id}`,
 			titulo: filtro.nome,
+			// Filtro sem condição nenhuma não filtra nada — é o estado em que ele nasce. A contagem no
+			// cabeçalho denuncia isso sem ela ter que abrir um por um.
+			resumo: resumoContagem(contarCondicoes(filtro.raiz), "condição", "condições"),
 		});
 
 		acordeao.sePreenchido((corpo) => {
@@ -1790,7 +1833,7 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		// Sem h3 próprio: o título vem do acordeão que envolve esta seção (ver renderizarPaginaGeral).
 		containerEl.createEl("p", {
 			text: "Botões que aparecem ao clicar com o botão direito em cima de uma tarefa, no Kanban, no Calendário e na Lista. Cada botão pode alterar um ou vários campos de uma vez.",
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
 
 		const listaBotoes = containerEl.createDiv();
@@ -1809,10 +1852,13 @@ export class AbaConfiguracoes extends PluginSettingTab {
 				})
 		);
 
-		containerEl.createEl("h4", { text: "Ações prontas" });
+		// Subtítulo dentro da seção (h4 com classe), não um acordeão: as ações prontas são a segunda
+		// metade do mesmo assunto — o menu do clique direito — e escondê-las atrás de mais um clique
+		// faria parecer que o menu tem só os botões criados por ela.
+		containerEl.createEl("h4", { text: "Ações prontas", cls: "mytasks-config-subtitulo" });
 		containerEl.createEl("p", {
 			text: "Ações que já vêm com o plugin. Você não muda o que elas fazem, mas pode escondê-las ou trocar o nome que aparece no menu.",
-			cls: "setting-item-description",
+			cls: "mytasks-config-nota",
 		});
 
 		for (const id of ORDEM_ACOES_FIXAS) {
@@ -1845,8 +1891,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 
 		if (this.grupo.botoesAcao.length === 0) {
 			container.createEl("p", {
-				text: "Nenhum botão criado. Sem botões (e sem as ações prontas abaixo), o clique direito não abre menu nenhum.",
-				cls: "setting-item-description",
+				text: "Nenhum botão criado ainda. Sem botões (e sem as ações prontas abaixo), o clique direito não abre menu nenhum.",
+				cls: "mytasks-config-vazio",
 			});
 			return;
 		}
@@ -1951,6 +1997,15 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		container.empty();
 		const propriedades = [...this.grupo.propriedades].sort((a, b) => a.ordem - b.ordem);
 
+		// Sem isso a seção abria direto no botão "+ Nova propriedade", sem dizer se a lista está vazia
+		// ou se ela simplesmente não carregou.
+		if (propriedades.length === 0) {
+			container.createEl("p", {
+				text: "Nenhuma propriedade ainda. Crie a primeira abaixo.",
+				cls: "mytasks-config-vazio",
+			});
+		}
+
 		propriedades.forEach((propriedade, indice) => {
 			this.renderizarItemPropriedade(container, propriedade, indice, propriedades.length);
 		});
@@ -2051,8 +2106,8 @@ export class AbaConfiguracoes extends PluginSettingTab {
 		if (obterOpcoes().length === 0) {
 			const caixaVazia = container.createDiv({ cls: "mytasks-cores-caixa" });
 			caixaVazia.createEl("p", {
-				text: "Cadastre ao menos uma opção com cor acima para poder usá-la como destaque visual da tarefa.",
-				cls: "setting-item-description",
+				text: "Nenhuma opção com cor ainda. Cadastre ao menos uma acima para poder usá-la como destaque visual da tarefa.",
+				cls: "mytasks-config-vazio",
 			});
 			return;
 		}
@@ -2110,6 +2165,12 @@ export class AbaConfiguracoes extends PluginSettingTab {
 
 	private renderizarListaVisualizacoes(container: HTMLElement) {
 		container.empty();
+		if (this.grupo.visualizacoesSalvas.length === 0) {
+			container.createEl("p", {
+				text: "Nenhuma visualização salva ainda. Crie a primeira abaixo.",
+				cls: "mytasks-config-vazio",
+			});
+		}
 		for (const visualizacao of this.grupo.visualizacoesSalvas) {
 			this.renderizarItemVisualizacao(container, visualizacao);
 		}

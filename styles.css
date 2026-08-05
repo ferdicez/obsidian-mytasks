@@ -1757,6 +1757,35 @@
 	margin-top: 12px;
 }
 
+/* "Nenhum X ainda": a ausência de itens numa lista. Itálico e `--text-faint` porque é uma frase que
+   SOME assim que ela cria o primeiro item — não é conteúdo da tela, é a falta dele. Antes cada lista
+   usava `setting-item-description`, a mesma classe das notas explicativas, e as duas coisas ficavam
+   com o mesmo peso apesar de dizerem coisas opostas. */
+.mytasks-config-vazio {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	padding: 0.5em 0;
+}
+
+/* Contexto permanente no topo de uma seção — o que ajuda a decidir antes de mexer nos controles.
+   Diferente de `-vazio`: não é ausência, é explicação, e fica lá sempre. */
+.mytasks-config-nota {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	padding: 0.2em 0 0.6em;
+}
+
+/* Divide uma seção em duas partes sem gastar um acordeão (ex.: "Ações prontas" depois dos botões
+   criados por ela). A linha em cima é o que separa — sem ela o h4 pareceria só um item em negrito. */
+.mytasks-config-subtitulo {
+	margin: 1.4em 0 0.2em;
+	padding-top: 0.8em;
+	border-top: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 /* ---------- Blocos sem moldura nas Configurações ----------
    Pedido dela: nada de retângulo em volta de bloco — só uma linha divisória separando um do outro.
    O tema (Minimal) desenha cada `.setting-item` como um cartão com fundo, borda e cantos curvos;
@@ -1867,8 +1896,22 @@
 	height: 14px;
 }
 
+/* `flex: 1` pra sobrar espaço entre os textos e o resumo — é o que joga o resumo pra ponta direita
+   do cabeçalho. `min-width: 0` deixa um título/descrição longo encolher em vez de empurrar o resumo
+   pra fora da linha. */
 .mytasks-acordeao-textos {
+	flex: 1;
 	min-width: 0;
+}
+
+/* Contagem à direita do título ("3 status", "nenhum"): discreta o bastante pra não competir com o
+   título, visível o bastante pra ser lida sem abrir a seção. `flex-shrink: 0` porque ela é curta e
+   quem deve encolher numa janela estreita é o título. */
+.mytasks-acordeao-resumo {
+	flex-shrink: 0;
+	margin-top: 2px;
+	font-size: 0.85em;
+	color: var(--text-faint);
 }
 
 .mytasks-acordeao-titulo {
