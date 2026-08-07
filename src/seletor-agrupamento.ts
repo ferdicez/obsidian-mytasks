@@ -74,9 +74,14 @@ export class SeletorAgrupamento {
 	// Só preenchido na apresentação "abas": permite mover a marcação de ativa sem redesenhar tudo.
 	private abas = new Map<TipoAgrupamento, HTMLButtonElement>();
 	private agrupamentoAtual: TipoAgrupamento;
+	// Estado, não só opção de desenho: uma aba avulsa (o modo "semana") liga isso de volta ao ser
+	// clicada, e o clique numa aba de agrupamento desliga. É o que distingue "nenhum agrupamento em
+	// vigor" de "o agrupamento em vigor é este", com o mesmo valor em `agrupamentoAtual`.
+	private semSelecao: boolean;
 
 	constructor(private container: HTMLElement, private opcoes: OpcoesSeletorAgrupamento) {
 		this.agrupamentoAtual = opcoes.agrupamentoAtual;
+		this.semSelecao = opcoes.semSelecao === true;
 
 		if (opcoes.apresentacao === "abas") {
 			this.desenharAbas();
@@ -109,11 +114,16 @@ export class SeletorAgrupamento {
 				text: rotuloAgrupamento(agrupamento, this.opcoes.configuracoes),
 			});
 			this.abas.set(agrupamento, aba);
-			if (!this.opcoes.semSelecao && agrupamento === this.agrupamentoAtual) {
+			if (!this.semSelecao && agrupamento === this.agrupamentoAtual) {
 				aba.addClass("mytasks-calendario-aba-modo-ativa");
 			}
 			aba.addEventListener("click", () => {
-				if (agrupamento === this.agrupamentoAtual) return;
+				// `semSelecao` = nenhuma aba está em vigor (o Kanban no modo semana), embora
+				// `agrupamentoAtual` siga guardado pra onde ela volta. Sem testar isso aqui, clicar na
+				// aba que COINCIDE com o valor guardado era descartado como "já está nela" e o modo
+				// semana não saía — ela tinha que passar por outro agrupamento antes de voltar.
+				if (!this.semSelecao && agrupamento === this.agrupamentoAtual) return;
+				this.semSelecao = false;
 				this.agrupamentoAtual = agrupamento;
 				// O seletor move a marcação sozinho: quem chama pode redesenhar só o corpo da view
 				// (o Kanban redesenha a grade, não o cabeçalho) e a pastilha ativa continua certa.
@@ -125,7 +135,7 @@ export class SeletorAgrupamento {
 
 	private marcarAbaAtiva(): void {
 		for (const [agrupamento, aba] of this.abas) {
-			aba.toggleClass("mytasks-calendario-aba-modo-ativa", agrupamento === this.agrupamentoAtual);
+			aba.toggleClass("mytasks-calendario-aba-modo-ativa", !this.semSelecao && agrupamento === this.agrupamentoAtual);
 		}
 	}
 
@@ -141,7 +151,10 @@ export class SeletorAgrupamento {
 		const aba = bloco.createEl("button", { cls: "mytasks-calendario-aba-modo", text: rotulo });
 		if (ativa) aba.addClass("mytasks-calendario-aba-modo-ativa");
 		aba.addEventListener("click", () => {
-			// A marcação das abas de agrupamento sai junto: as duas coisas são exclusivas.
+			// A marcação das abas de agrupamento sai junto: as duas coisas são exclusivas. `semSelecao`
+			// volta a valer, senão o próximo clique na aba do agrupamento guardado seria descartado
+			// como "já está nela" e o modo não sairia.
+			this.semSelecao = true;
 			for (const outra of this.abas.values()) outra.removeClass("mytasks-calendario-aba-modo-ativa");
 			aba.addClass("mytasks-calendario-aba-modo-ativa");
 			aoClicar();

@@ -64,6 +64,59 @@ function diaDaSemanaDaData(dataStr: string): number {
 	return new Date(ano, mes - 1, dia).getDay();
 }
 
+// Chave AAAA-MM-DD de uma data local (o mesmo formato gravado no frontmatter).
+function chaveData(data: Date): string {
+	const mes = String(data.getMonth() + 1).padStart(2, "0");
+	const dia = String(data.getDate()).padStart(2, "0");
+	return `${data.getFullYear()}-${mes}-${dia}`;
+}
+
+// Segunda-feira da semana que contém `data`. A semana de trabalho começa na segunda, igual às
+// colunas de DIAS_SEMANA_KANBAN — domingo (getDay() === 0) pertence à semana que começou seis
+// dias antes, não à que começa no dia seguinte.
+function segundaDaSemana(data: Date): Date {
+	const d = new Date(data.getFullYear(), data.getMonth(), data.getDate());
+	const recuo = (d.getDay() + 6) % 7;
+	d.setDate(d.getDate() - recuo);
+	return d;
+}
+
+// Uma rotina fixa é uma CADEIA de ocorrências, não um arquivo: concluir gera um arquivo novo com a
+// data seguinte (`ocorrenciaAnterior` aponta pro anterior) ou reescreve o mesmo arquivo. Para o
+// quadro da semana, todas as ocorrências de uma cadeia são a MESMA linha da rotina — é isso que
+// faz a tarefa continuar na coluna depois de concluída, em vez de sumir com a ocorrência.
+//
+// A cadeia é percorrida pelos elos que existem no vault. Uma ocorrência cujo anterior já foi
+// apagado (histórico limpo, ou "manter histórico" desligado) simplesmente inicia a própria cadeia.
+function agruparEmCadeias(tarefas: Tarefa[]): Tarefa[][] {
+	const porCaminho = new Map<string, Tarefa>();
+	for (const t of tarefas) porCaminho.set(t.caminho, t);
+
+	// Raiz de cada cadeia, seguindo `nasceuDeOcorrenciaCaminho` para trás. O conjunto `visitados`
+	// protege de um ciclo — dois arquivos apontando um pro outro travariam o laço.
+	const raizDe = new Map<string, string>();
+	for (const tarefa of tarefas) {
+		const visitados = new Set<string>([tarefa.caminho]);
+		let atual = tarefa;
+		while (atual.nasceuDeOcorrenciaCaminho) {
+			const anterior = porCaminho.get(atual.nasceuDeOcorrenciaCaminho);
+			if (!anterior || visitados.has(anterior.caminho)) break;
+			visitados.add(anterior.caminho);
+			atual = anterior;
+		}
+		raizDe.set(tarefa.caminho, atual.caminho);
+	}
+
+	const cadeias = new Map<string, Tarefa[]>();
+	for (const tarefa of tarefas) {
+		const raiz = raizDe.get(tarefa.caminho) ?? tarefa.caminho;
+		const cadeia = cadeias.get(raiz);
+		if (cadeia) cadeia.push(tarefa);
+		else cadeias.set(raiz, [tarefa]);
+	}
+	return [...cadeias.values()];
+}
+
 export class MotorKanban {
 	private agrupamento: TipoAgrupamento;
 	// Segundo nível: divide as tarefas DENTRO de cada coluna em seções. "nenhum" = lista corrida (padrão).
@@ -130,40 +183,71 @@ export class MotorKanban {
 		];
 	}
 
-	// Modo "Semana": uma coluna por dia (seg→dom) com as tarefas de recorrência SEMANAL. O dia vem da
-	// data da tarefa — a próxima ocorrência dela. Uma tarefa semanal sem data não tem dia definido, e
-	// vai pra coluna "sem dia" no fim, em vez de sumir da tela sem explicação.
+	// Modo "Semana": uma coluna por dia (seg→dom) com as tarefas de recorrência SEMANAL — a rotina
+	// fixa dela. A unidade aqui é a ROTINA, não a ocorrência: cada cadeia de ocorrências rende UM
+	// cartão, sempre visível na coluna do seu dia, concluída ou não. Concluir marca o cartão como
+	// feito e ele CONTINUA ali até virar a semana, em vez de sumir junto com a ocorrência que
+	// avançou de data. É a visão de "o que eu faço toda semana", pedido dela.
+	//
+	// Tarefa semanal sem data fica de fora: sem data não há dia da semana, e ela não teria coluna.
 	private renderizarSemana(): void {
 		if (!this.areaGrade) return;
 		this.areaGrade.empty();
 
-		const semanais = this.tarefasFiltradas().filter((t) => t.recorrencia === "semanal");
+		const semanais = this.tarefasFiltradas().filter((t) => t.recorrencia === "semanal" && t.data);
 
 		if (semanais.length === 0) {
 			this.areaGrade.createEl("p", {
-				text: "Nenhuma tarefa com recorrência semanal. As tarefas fixas da sua rotina aparecem aqui.",
+				text: "Nenhuma tarefa com recorrência semanal e data. As tarefas fixas da sua rotina aparecem aqui.",
 				cls: "mytasks-vazio",
 			});
 			return;
 		}
 
-		const semDia: Tarefa[] = [];
+		const inicioSemana = chaveData(segundaDaSemana(new Date()));
 		const porDia = new Map<number, Tarefa[]>();
 		for (const dia of DIAS_SEMANA_KANBAN) porDia.set(dia.indice, []);
 
-		for (const tarefa of semanais) {
-			if (!tarefa.data) {
-				semDia.push(tarefa);
-				continue;
-			}
+		for (const cadeia of agruparEmCadeias(semanais)) {
+			const tarefa = this.ocorrenciaDaSemana(cadeia, inicioSemana);
+			if (!tarefa?.data) continue;
 			porDia.get(diaDaSemanaDaData(tarefa.data))?.push(tarefa);
 		}
 
 		for (const dia of DIAS_SEMANA_KANBAN) {
-			const tarefas = porDia.get(dia.indice) ?? [];
-			this.desenharColunaSemana(dia.rotulo, tarefas);
+			this.desenharColunaSemana(dia.rotulo, porDia.get(dia.indice) ?? []);
 		}
-		if (semDia.length > 0) this.desenharColunaSemana("sem dia", semDia);
+	}
+
+	// Qual ocorrência de uma rotina representa a semana corrente. Concluir avança a data (o mesmo
+	// arquivo, quando "manter histórico" está desligado) ou cria a ocorrência seguinte e arquiva a
+	// concluída — nos dois casos, a que tem data DENTRO da semana é a que interessa, mesmo já feita.
+	//
+	// Sem nenhuma na semana (rotina adiantada, cuja próxima ocorrência já caiu na semana que vem),
+	// vale a mais recente ANTES do fim da semana: é o registro do que aconteceu no dia dela. E se
+	// toda a cadeia estiver no futuro (rotina que ainda vai começar), vale a mais próxima — o dia
+	// fixo da semana é o mesmo de qualquer jeito, e assim a linha da rotina nunca some do quadro.
+	private ocorrenciaDaSemana(cadeia: Tarefa[], inicioSemana: string): Tarefa | null {
+		const comData = cadeia.filter((t): t is Tarefa & { data: string } => Boolean(t.data));
+		if (comData.length === 0) return null;
+
+		const fimSemana = chaveData(
+			(() => {
+				const [ano, mes, dia] = inicioSemana.split("-").map(Number);
+				const d = new Date(ano, mes - 1, dia);
+				d.setDate(d.getDate() + 6);
+				return d;
+			})()
+		);
+
+		const naSemana = comData.filter((t) => t.data >= inicioSemana && t.data <= fimSemana);
+		// Mais de uma na mesma semana (rotina concluída e refeita no mesmo dia) — a última é a atual.
+		if (naSemana.length > 0) return naSemana.reduce((a, b) => (b.data >= a.data ? b : a));
+
+		const passadas = comData.filter((t) => t.data < inicioSemana);
+		if (passadas.length > 0) return passadas.reduce((a, b) => (b.data >= a.data ? b : a));
+
+		return comData.reduce((a, b) => (b.data < a.data ? b : a));
 	}
 
 	// A coluna do modo Semana usa a mesma casca visual das colunas do Kanban, mas NÃO é alvo de
