@@ -198,15 +198,18 @@ export class MotorKanban {
 		if (!this.areaGrade) return;
 		this.areaGrade.empty();
 
-		const semanais = this.tarefasFiltradas().filter((t) => t.recorrencia === "semanal" && t.data);
-
-		if (semanais.length === 0) {
-			this.areaGrade.createEl("p", {
-				text: "Nenhuma tarefa com recorrência semanal e data. As tarefas fixas da sua rotina aparecem aqui.",
-				cls: "mytasks-vazio",
-			});
-			return;
-		}
+		// As cadeias são montadas sobre TODAS as tarefas do repositório, não sobre as filtradas — e é
+		// essa a diferença entre a rotina continuar à vista ou sumir ao ser concluída. A ocorrência
+		// concluída costuma cair fora do filtro (o filtro esconde concluídas, ou ela foi movida pra
+		// pasta de Concluídas): montando a cadeia sobre a lista filtrada, ela nunca entra, não há elo
+		// nenhum, e o cartão desaparece exatamente como antes da correção.
+		//
+		// O filtro continua valendo — só que aplicado a QUAIS ROTINAS aparecem (uma rotina entra se
+		// qualquer ocorrência dela passa no filtro), não a quais ocorrências formam a cadeia.
+		const todasSemanais = this.opcoes.repositorio
+			.listarTarefas()
+			.filter((t) => t.recorrencia === "semanal" && t.data);
+		const visiveis = new Set(this.tarefasFiltradas().map((t) => t.caminho));
 
 		const inicioSemana = chaveData(segundaDaSemana(new Date()));
 		const porDia = new Map<number, Tarefa[]>();
@@ -215,11 +218,22 @@ export class MotorKanban {
 		// A cadeia de cada cartão fica guardada pro arrasto: mudar o dia da rotina precisa saber quais
 		// outras ocorrências existem (a concluída não é a que se move — ver moverRotinaParaDia).
 		this.cadeiaPorCaminho.clear();
-		for (const cadeia of agruparEmCadeias(semanais)) {
+		let rotinas = 0;
+		for (const cadeia of agruparEmCadeias(todasSemanais)) {
+			if (!cadeia.some((t) => visiveis.has(t.caminho))) continue;
+			rotinas++;
 			const tarefa = this.ocorrenciaDaSemana(cadeia, inicioSemana);
 			if (!tarefa?.data) continue;
 			this.cadeiaPorCaminho.set(tarefa.caminho, cadeia);
 			porDia.get(diaDaSemanaDaData(tarefa.data))?.push(tarefa);
+		}
+
+		if (rotinas === 0) {
+			this.areaGrade.createEl("p", {
+				text: "Nenhuma tarefa com recorrência semanal e data. As tarefas fixas da sua rotina aparecem aqui.",
+				cls: "mytasks-vazio",
+			});
+			return;
 		}
 
 		for (const dia of DIAS_SEMANA_KANBAN) {
