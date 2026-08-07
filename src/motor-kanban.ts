@@ -9,6 +9,7 @@ import {
 	clonarGrupoFiltro,
 	grupoFiltroVazio,
 	obterFiltroSalvo,
+	ultimaOpcaoStatus,
 } from "./tipos";
 import { RepositorioTarefas } from "./repositorio-tarefas";
 import { ID_DATA_ENTRADA, desenharCartaoTarefa, FORMATO_DRAG_TAREFA } from "./render-tarefa";
@@ -126,6 +127,9 @@ export class MotorKanban {
 	private areaGrade: HTMLElement | null = null;
 	// "colunas" = Kanban de sempre (agrupamento em colunas). "semana" = rotina fixa da semana.
 	private modo: "colunas" | "semana" = "colunas";
+	// Cadeia de ocorrências de cada cartão desenhado no modo semana, indexada pelo caminho do cartão.
+	// Preenchida em renderizarSemana e lida no arrasto — mover a rotina precisa das outras ocorrências.
+	private cadeiaPorCaminho = new Map<string, Tarefa[]>();
 
 	constructor(private containerEl: HTMLElement, private opcoes: OpcoesMotorKanban) {
 		this.agrupamento = opcoes.agrupamentoInicial ?? ID_STATUS;
@@ -208,15 +212,64 @@ export class MotorKanban {
 		const porDia = new Map<number, Tarefa[]>();
 		for (const dia of DIAS_SEMANA_KANBAN) porDia.set(dia.indice, []);
 
+		// A cadeia de cada cartão fica guardada pro arrasto: mudar o dia da rotina precisa saber quais
+		// outras ocorrências existem (a concluída não é a que se move — ver moverRotinaParaDia).
+		this.cadeiaPorCaminho.clear();
 		for (const cadeia of agruparEmCadeias(semanais)) {
 			const tarefa = this.ocorrenciaDaSemana(cadeia, inicioSemana);
 			if (!tarefa?.data) continue;
+			this.cadeiaPorCaminho.set(tarefa.caminho, cadeia);
 			porDia.get(diaDaSemanaDaData(tarefa.data))?.push(tarefa);
 		}
 
 		for (const dia of DIAS_SEMANA_KANBAN) {
-			this.desenharColunaSemana(dia.rotulo, porDia.get(dia.indice) ?? []);
+			this.desenharColunaSemana(dia.rotulo, porDia.get(dia.indice) ?? [], dia.indice);
 		}
+	}
+
+	// Move uma rotina para outro dia da semana, arrastando o cartão. O quadro é "a rotina fixa", então
+	// o gesto muda o dia DA ROTINA daqui pra frente — não é um adiamento pontual desta semana.
+	//
+	// Qual arquivo recebe a data nova: a ocorrência ATIVA da cadeia, nunca uma já concluída. O cartão
+	// visível pode ser a concluída desta semana (é justamente o que faz a rotina continuar à vista
+	// depois de marcada), e reescrever a data dela falsificaria o registro do que já aconteceu — a
+	// tarefa de terça passaria a dizer que foi feita na quinta. Nesse caso quem se move é a próxima
+	// ocorrência, que é o que "a rotina agora é quinta" significa.
+	private async moverRotinaParaDia(tarefa: Tarefa, diaDestino: number): Promise<void> {
+		// O mapa é indexado pelo cartão EXIBIDO, mas o arrasto pode trazer outra ocorrência da mesma
+		// cadeia — daí a varredura como segunda tentativa, antes de tratar a tarefa como cadeia de um.
+		const cadeia =
+			this.cadeiaPorCaminho.get(tarefa.caminho) ??
+			[...this.cadeiaPorCaminho.values()].find((c) => c.some((t) => t.caminho === tarefa.caminho)) ??
+			[tarefa];
+		const concluido = ultimaOpcaoStatus(this.opcoes.configuracoes.status);
+		const ativas = cadeia.filter((t) => t.data && t.status !== concluido);
+
+		// Sem nenhuma ativa (rotina cuja última ocorrência foi concluída e ainda não gerou a seguinte —
+		// acontece quando a recorrência chegou na data-fim), não há o que reagendar sem inventar uma
+		// ocorrência nova. Melhor não fazer nada em silêncio do que reescrever a concluída.
+		const alvo = ativas.length > 0 ? ativas.reduce((a, b) => (a.data! <= b.data! ? a : b)) : null;
+		if (!alvo?.data) return;
+
+		const novaData = this.dataNoMesmoDiaDaSemana(alvo.data, diaDestino);
+		if (novaData === alvo.data) return;
+		await this.opcoes.repositorio.atualizarData(alvo, novaData);
+		this.renderizar();
+	}
+
+	// Desloca uma data para o `diaDestino` DENTRO da mesma semana (segunda→domingo) em que ela cai.
+	// Mover terça→quinta anda +2 dias; quinta→terça anda −2 e a ocorrência fica no passado dessa
+	// semana, que é o correto: a rotina passa a ser terça, e a próxima conclusão avança +7 a partir
+	// daí. Trabalhar em dias corridos (não em "próxima quinta") mantém o intervalo semanal intacto.
+	private dataNoMesmoDiaDaSemana(dataStr: string, diaDestino: number): string {
+		const [ano, mes, dia] = dataStr.split("-").map(Number);
+		const data = new Date(ano, mes - 1, dia);
+		// Posição na semana com a segunda valendo 0, igual à ordem das colunas — no índice cru do
+		// getDay() o domingo é 0 e ficaria antes da segunda, invertendo o sentido do arrasto.
+		const posicaoAtual = (data.getDay() + 6) % 7;
+		const posicaoDestino = (diaDestino + 6) % 7;
+		data.setDate(data.getDate() + (posicaoDestino - posicaoAtual));
+		return chaveData(data);
 	}
 
 	// Qual ocorrência de uma rotina representa a semana corrente. Concluir avança a data (o mesmo
@@ -250,10 +303,9 @@ export class MotorKanban {
 		return comData.reduce((a, b) => (b.data < a.data ? b : a));
 	}
 
-	// A coluna do modo Semana usa a mesma casca visual das colunas do Kanban, mas NÃO é alvo de
-	// soltura: arrastar aqui teria que reescrever a data pra cair noutro dia da semana, o que é uma
-	// decisão de recorrência (qual ocorrência muda?) que ela não pediu.
-	private desenharColunaSemana(rotulo: string, tarefas: Tarefa[]): void {
+	// A coluna do modo Semana usa a mesma casca visual das colunas do Kanban, e desde a rodada do
+	// arrasto também é alvo de soltura: soltar aqui muda o dia FIXO da rotina (ver moverRotinaParaDia).
+	private desenharColunaSemana(rotulo: string, tarefas: Tarefa[], diaIndice: number): void {
 		if (!this.areaGrade) return;
 		const colunaEl = this.areaGrade.createDiv({ cls: "mytasks-kanban-coluna" });
 
@@ -262,6 +314,13 @@ export class MotorKanban {
 		cabecalhoColuna.createEl("span", { text: String(tarefas.length), cls: "mytasks-kanban-contagem-coluna" });
 
 		const listaColuna = colunaEl.createDiv({ cls: "mytasks-kanban-lista-coluna" });
+
+		// A coluna inteira é o alvo, registrada ANTES do desenho dos cartões porque o caminho sem
+		// subagrupamento sai por um return no meio. As seções de subagrupamento NÃO são alvos aqui
+		// (ao contrário do Kanban de colunas): soltar numa seção gravaria também o valor do
+		// subagrupamento, e no modo semana a coluna já significa outra coisa — o dia. Uma soltura,
+		// uma mudança.
+		this.registrarAlvoDeSolturaSemana(colunaEl, diaIndice);
 
 		// O subagrupamento vale aqui também: dentro do dia, as tarefas podem ser divididas por status,
 		// etiqueta etc. No modo semana ele NUNCA coincide com as colunas (que são dias, não uma
@@ -278,6 +337,34 @@ export class MotorKanban {
 			const listaSecao = secaoEl.createDiv({ cls: "mytasks-kanban-lista-secao" });
 			for (const tarefa of secao.tarefas) this.desenharCartao(listaSecao, tarefa);
 		}
+	}
+
+	// Soltura no modo semana: muda o DIA da rotina, não uma propriedade. É um método próprio em vez
+	// de um parâmetro a mais em registrarAlvoDeSoltura porque as duas gravam coisas diferentes por
+	// caminhos diferentes (data via atualizarData; agrupamento via gravarValorDeAgrupamento), e
+	// misturar os dois num só deixaria o método cheio de "se estiver no modo semana".
+	private registrarAlvoDeSolturaSemana(elemento: HTMLElement, diaIndice: number): void {
+		elemento.addEventListener("dragover", (evento) => {
+			if (!evento.dataTransfer?.types.includes(FORMATO_DRAG_TAREFA)) return;
+			evento.preventDefault();
+			elemento.addClass("mytasks-kanban-alvo-soltura");
+		});
+		elemento.addEventListener("dragleave", () => elemento.removeClass("mytasks-kanban-alvo-soltura"));
+		elemento.addEventListener("drop", async (evento) => {
+			const caminho = evento.dataTransfer?.getData(FORMATO_DRAG_TAREFA);
+			elemento.removeClass("mytasks-kanban-alvo-soltura");
+			if (!caminho) return;
+			evento.preventDefault();
+			evento.stopPropagation();
+			// Procura na cadeia guardada, não em tarefasFiltradas: o cartão arrastado pode ser uma
+			// ocorrência concluída que já mora na pasta de Concluídas, e o filtro interativo pode não
+			// devolvê-la — mas ela ESTÁ desenhada na tela, então precisa poder ser arrastada.
+			const tarefa =
+				[...this.cadeiaPorCaminho.values()].flat().find((t) => t.caminho === caminho) ??
+				this.tarefasFiltradas().find((t) => t.caminho === caminho);
+			if (!tarefa) return;
+			await this.moverRotinaParaDia(tarefa, diaIndice);
+		});
 	}
 
 	private renderizarGrade(): void {
