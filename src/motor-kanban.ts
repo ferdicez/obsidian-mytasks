@@ -198,18 +198,24 @@ export class MotorKanban {
 		if (!this.areaGrade) return;
 		this.areaGrade.empty();
 
-		// As cadeias são montadas sobre TODAS as tarefas do repositório, não sobre as filtradas — e é
-		// essa a diferença entre a rotina continuar à vista ou sumir ao ser concluída. A ocorrência
-		// concluída costuma cair fora do filtro (o filtro esconde concluídas, ou ela foi movida pra
-		// pasta de Concluídas): montando a cadeia sobre a lista filtrada, ela nunca entra, não há elo
-		// nenhum, e o cartão desaparece exatamente como antes da correção.
+		// O MODO SEMANA IGNORA O FILTRO — decisão dela, e é o que faz este quadro ser utilizável.
 		//
-		// O filtro continua valendo — só que aplicado a QUAIS ROTINAS aparecem (uma rotina entra se
-		// qualquer ocorrência dela passa no filtro), não a quais ocorrências formam a cadeia.
+		// O filtro do Kanban seleciona OCORRÊNCIAS por data ("hoje", "esta semana"), e uma rotina é
+		// justamente um conjunto de ocorrências espalhadas por dias diferentes. Com o filtro "hoje"
+		// ligado, só a ocorrência de hoje passa: as outras seis colunas ficam vazias e a rotina
+		// concluída (que virou uma ocorrência com outra data) some. Filtrar por data um quadro cujas
+		// colunas JÁ SÃO os dias da semana é uma contradição — a aba "semana" é sempre a rotina
+		// inteira, e o filtro continua valendo normalmente no Kanban de colunas.
+		//
+		// Vale também o motivo da 0.27.1: as cadeias precisam de TODAS as ocorrências pra se formar,
+		// inclusive as concluídas que moram na pasta de Concluídas.
+		// `opcoes.filtro` CONTINUA valendo: ele não é o filtro da barra, é o pertencimento ao grupo
+		// (ver vista-kanban-aba.ts). Ignorá-lo faria o quadro do grupo "demandas" mostrar as rotinas
+		// do grupo "conteúdo" — o que se ignora aqui é só o filtro escolhido na barra.
 		const todasSemanais = this.opcoes.repositorio
 			.listarTarefas()
+			.filter((t) => (this.opcoes.filtro ? this.opcoes.filtro(t) : true))
 			.filter((t) => t.recorrencia === "semanal" && t.data);
-		const visiveis = new Set(this.tarefasFiltradas().map((t) => t.caminho));
 
 		const inicioSemana = chaveData(segundaDaSemana(new Date()));
 		const porDia = new Map<number, Tarefa[]>();
@@ -220,7 +226,6 @@ export class MotorKanban {
 		this.cadeiaPorCaminho.clear();
 		let rotinas = 0;
 		for (const cadeia of agruparEmCadeias(todasSemanais)) {
-			if (!cadeia.some((t) => visiveis.has(t.caminho))) continue;
 			rotinas++;
 			const tarefa = this.ocorrenciaDaSemana(cadeia, inicioSemana);
 			if (!tarefa?.data) continue;
@@ -583,11 +588,15 @@ export class MotorKanban {
 		// e os embeds ainda a usam.
 	}
 
-	// A barrinha de Filtro salvo. Extraída num método porque o modo semana também a desenha — lá ela é
-	// o único controle depois das abas.
+	// A barrinha de Filtro salvo.
 	private desenharFiltroSalvo(cabecalho: HTMLElement): void {
 		const filtroMovelVazio = this.opcoes.filtrosExtrasIds && this.opcoes.filtrosExtrasIds.length === 0;
 		if (this.opcoes.permitirEdicaoFiltro === false || filtroMovelVazio) return;
+		// No modo semana o filtro não é aplicado (o quadro é sempre a rotina inteira), então o seletor
+		// nem aparece: deixá-lo à vista e inerte é pior do que não tê-lo — ela escolheria "hoje" e o
+		// quadro não mudaria, sem explicação. O valor escolhido continua guardado em `filtroSalvoId`
+		// e volta a valer assim que ela sai pro Kanban de colunas.
+		if (this.modo === "semana") return;
 
 		new SeletorFiltroSalvo(cabecalho, {
 			configuracoes: this.opcoes.configuracoes,
